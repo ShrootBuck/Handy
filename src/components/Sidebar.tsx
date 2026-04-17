@@ -1,18 +1,10 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Cog, FlaskConical, History, Info, Sparkles, Cpu } from "lucide-react";
+import { Cog, FlaskConical, History } from "lucide-react";
 import HandyTextLogo from "./icons/HandyTextLogo";
 import HandyHand from "./icons/HandyHand";
 import { useSettings } from "../hooks/useSettings";
-import {
-  GeneralSettings,
-  AdvancedSettings,
-  HistorySettings,
-  DebugSettings,
-  AboutSettings,
-  PostProcessingSettings,
-  ModelsSettings,
-} from "./settings";
+import { GeneralSettings, AdvancedSettings, HistorySettings, DebugSettings } from "./settings";
 
 export type SidebarSection = keyof typeof SECTIONS_CONFIG;
 
@@ -38,12 +30,6 @@ export const SECTIONS_CONFIG = {
     component: GeneralSettings,
     enabled: () => true,
   },
-  models: {
-    labelKey: "sidebar.models",
-    icon: Cpu,
-    component: ModelsSettings,
-    enabled: () => true,
-  },
   advanced: {
     labelKey: "sidebar.advanced",
     icon: Cog,
@@ -56,23 +42,11 @@ export const SECTIONS_CONFIG = {
     component: HistorySettings,
     enabled: () => true,
   },
-  postprocessing: {
-    labelKey: "sidebar.postProcessing",
-    icon: Sparkles,
-    component: PostProcessingSettings,
-    enabled: (settings) => settings?.post_process_enabled ?? false,
-  },
   debug: {
     labelKey: "sidebar.debug",
     icon: FlaskConical,
     component: DebugSettings,
     enabled: (settings) => settings?.debug_mode ?? false,
-  },
-  about: {
-    labelKey: "sidebar.about",
-    icon: Info,
-    component: AboutSettings,
-    enabled: () => true,
   },
 } as const satisfies Record<string, SectionConfig>;
 

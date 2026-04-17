@@ -11,14 +11,14 @@ import { ModelStateEvent, RecordingErrorEvent } from "./lib/types/events";
 import "./App.css";
 import AccessibilityPermissions from "./components/AccessibilityPermissions";
 import Footer from "./components/footer";
-import Onboarding, { AccessibilityOnboarding } from "./components/onboarding";
+import { AccessibilityOnboarding } from "./components/onboarding";
 import { Sidebar, SidebarSection, SECTIONS_CONFIG } from "./components/Sidebar";
 import { useSettings } from "./hooks/useSettings";
 import { useSettingsStore } from "./stores/settingsStore";
 import { commands } from "@/bindings";
 import { getLanguageDirection, initializeRTL } from "@/lib/utils/rtl";
 
-type OnboardingStep = "accessibility" | "model" | "done";
+type OnboardingStep = "accessibility" | "done";
 
 const renderSettingsContent = (section: SidebarSection) => {
   const ActiveComponent =
@@ -31,9 +31,6 @@ function App() {
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep | null>(
     null,
   );
-  // Track if this is a returning user who just needs to grant permissions
-  // (vs a new user who needs full onboarding including model selection)
-  const [isReturningUser, setIsReturningUser] = useState(false);
   const [currentSection, setCurrentSection] =
     useState<SidebarSection>("general");
   const { settings, updateSetting } = useSettings();
@@ -167,56 +164,42 @@ function App() {
 
   const checkOnboardingStatus = async () => {
     try {
-      // Check if they have any models available
-      const result = await commands.hasAnyModelsAvailable();
-      const hasModels = result.status === "ok" && result.data;
       const currentPlatform = platform();
 
-      if (hasModels) {
-        // Returning user - check if they need to grant permissions first
-        setIsReturningUser(true);
-
-        if (currentPlatform === "macos") {
-          try {
-            const [hasAccessibility, hasMicrophone] = await Promise.all([
-              checkAccessibilityPermission(),
-              checkMicrophonePermission(),
-            ]);
-            if (!hasAccessibility || !hasMicrophone) {
-              await revealMainWindowForPermissions();
-              setOnboardingStep("accessibility");
-              return;
-            }
-          } catch (e) {
-            console.warn("Failed to check macOS permissions:", e);
-            // If we can't check, proceed to main app and let them fix it there
+      if (currentPlatform === "macos") {
+        try {
+          const [hasAccessibility, hasMicrophone] = await Promise.all([
+            checkAccessibilityPermission(),
+            checkMicrophonePermission(),
+          ]);
+          if (!hasAccessibility || !hasMicrophone) {
+            await revealMainWindowForPermissions();
+            setOnboardingStep("accessibility");
+            return;
           }
+        } catch (e) {
+          console.warn("Failed to check macOS permissions:", e);
         }
-
-        if (currentPlatform === "windows") {
-          try {
-            const microphoneStatus =
-              await commands.getWindowsMicrophonePermissionStatus();
-            if (
-              microphoneStatus.supported &&
-              microphoneStatus.overall_access === "denied"
-            ) {
-              await revealMainWindowForPermissions();
-              setOnboardingStep("accessibility");
-              return;
-            }
-          } catch (e) {
-            console.warn("Failed to check Windows microphone permissions:", e);
-            // If we can't check, proceed to main app and let them fix it there
-          }
-        }
-
-        setOnboardingStep("done");
-      } else {
-        // New user - start full onboarding
-        setIsReturningUser(false);
-        setOnboardingStep("accessibility");
       }
+
+      if (currentPlatform === "windows") {
+        try {
+          const microphoneStatus =
+            await commands.getWindowsMicrophonePermissionStatus();
+          if (
+            microphoneStatus.supported &&
+            microphoneStatus.overall_access === "denied"
+          ) {
+            await revealMainWindowForPermissions();
+            setOnboardingStep("accessibility");
+            return;
+          }
+        } catch (e) {
+          console.warn("Failed to check Windows microphone permissions:", e);
+        }
+      }
+
+      setOnboardingStep("done");
     } catch (error) {
       console.error("Failed to check onboarding status:", error);
       setOnboardingStep("accessibility");
@@ -224,13 +207,6 @@ function App() {
   };
 
   const handleAccessibilityComplete = () => {
-    // Returning users already have models, skip to main app
-    // New users need to select a model
-    setOnboardingStep(isReturningUser ? "done" : "model");
-  };
-
-  const handleModelSelected = () => {
-    // Transition to main app - user has started a download
     setOnboardingStep("done");
   };
 
@@ -241,10 +217,6 @@ function App() {
 
   if (onboardingStep === "accessibility") {
     return <AccessibilityOnboarding onComplete={handleAccessibilityComplete} />;
-  }
-
-  if (onboardingStep === "model") {
-    return <Onboarding onModelSelected={handleModelSelected} />;
   }
 
   return (

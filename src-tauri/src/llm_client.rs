@@ -76,11 +76,11 @@ fn build_headers(provider: &PostProcessProvider, api_key: &str) -> Result<Header
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     headers.insert(
         REFERER,
-        HeaderValue::from_static("https://github.com/cjpais/Handy"),
+        HeaderValue::from_static("https://github.com/ShrootBuck/Handy"),
     );
     headers.insert(
         USER_AGENT,
-        HeaderValue::from_static("Handy/1.0 (+https://github.com/cjpais/Handy)"),
+        HeaderValue::from_static("Handy/1.0 (+https://github.com/ShrootBuck/Handy)"),
     );
     headers.insert("X-Title", HeaderValue::from_static("Handy"));
 
@@ -332,11 +332,11 @@ pub fn transcribe_with_mistral_blocking(
                 .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
                 .header(
                     REFERER,
-                    HeaderValue::from_static("https://github.com/cjpais/Handy"),
+                    HeaderValue::from_static("https://github.com/ShrootBuck/Handy"),
                 )
                 .header(
                     USER_AGENT,
-                    HeaderValue::from_static("Handy/1.0 (+https://github.com/cjpais/Handy)"),
+                    HeaderValue::from_static("Handy/1.0 (+https://github.com/ShrootBuck/Handy)"),
                 )
                 .header("X-Title", HeaderValue::from_static("Handy"))
                 .json(&request_body)
@@ -361,11 +361,11 @@ pub fn transcribe_with_mistral_blocking(
                 .bearer_auth(trimmed_api_key)
                 .header(
                     REFERER,
-                    HeaderValue::from_static("https://github.com/cjpais/Handy"),
+                    HeaderValue::from_static("https://github.com/ShrootBuck/Handy"),
                 )
                 .header(
                     USER_AGENT,
-                    HeaderValue::from_static("Handy/1.0 (+https://github.com/cjpais/Handy)"),
+                    HeaderValue::from_static("Handy/1.0 (+https://github.com/ShrootBuck/Handy)"),
                 )
                 .header("X-Title", HeaderValue::from_static("Handy"))
                 .multipart(form)

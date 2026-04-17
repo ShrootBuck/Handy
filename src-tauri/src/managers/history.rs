@@ -417,6 +417,7 @@ impl HistoryManager {
         let cutoff_timestamp = match retention_period {
             crate::settings::RecordingRetentionPeriod::Days3 => now - (3 * 24 * 60 * 60), // 3 days in seconds
             crate::settings::RecordingRetentionPeriod::Weeks2 => now - (2 * 7 * 24 * 60 * 60), // 2 weeks in seconds
+            crate::settings::RecordingRetentionPeriod::Months1 => now - (30 * 24 * 60 * 60), // 1 month in seconds (approximate)
             crate::settings::RecordingRetentionPeriod::Months3 => now - (3 * 30 * 24 * 60 * 60), // 3 months in seconds (approximate)
             _ => unreachable!("Should not reach here"),
         };

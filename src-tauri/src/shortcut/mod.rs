@@ -17,16 +17,13 @@ use log::{error, info, warn};
 use serde::Serialize;
 use specta::Type;
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_autostart::ManagerExt;
 
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 use crate::settings::APPLE_INTELLIGENCE_DEFAULT_MODEL_ID;
 use crate::settings::{
     self, get_settings, AutoSubmitKey, ClipboardHandling, KeyboardImplementation, LLMPrompt,
-    OverlayPosition, PasteMethod, ShortcutBinding, SoundTheme, TypingTool,
-    APPLE_INTELLIGENCE_PROVIDER_ID,
+    PasteMethod, ShortcutBinding, SoundTheme, TypingTool, APPLE_INTELLIGENCE_PROVIDER_ID,
 };
-use crate::tray;
 
 // Note: Commands are accessed via shortcut::handy_keys:: in lib.rs
 
@@ -536,28 +533,6 @@ pub fn change_selected_language_setting(app: AppHandle, language: String) -> Res
 
 #[tauri::command]
 #[specta::specta]
-pub fn change_overlay_position_setting(app: AppHandle, position: String) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
-    let parsed = match position.as_str() {
-        "none" => OverlayPosition::None,
-        "top" => OverlayPosition::Top,
-        "bottom" => OverlayPosition::Bottom,
-        other => {
-            warn!("Invalid overlay position '{}', defaulting to bottom", other);
-            OverlayPosition::Bottom
-        }
-    };
-    settings.overlay_position = parsed;
-    settings::write_settings(&app, settings);
-
-    // Update overlay position without recreating window
-    crate::utils::update_overlay_position(&app);
-
-    Ok(())
-}
-
-#[tauri::command]
-#[specta::specta]
 pub fn change_debug_mode_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
     settings.debug_mode = enabled;
@@ -572,82 +547,6 @@ pub fn change_debug_mode_setting(app: AppHandle, enabled: bool) -> Result<(), St
         }),
     );
 
-    Ok(())
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn change_start_hidden_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
-    settings.start_hidden = enabled;
-    settings::write_settings(&app, settings);
-
-    // Notify frontend
-    let _ = app.emit(
-        "settings-changed",
-        serde_json::json!({
-            "setting": "start_hidden",
-            "value": enabled
-        }),
-    );
-
-    Ok(())
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn change_autostart_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
-    settings.autostart_enabled = enabled;
-    settings::write_settings(&app, settings);
-
-    // Apply the autostart setting immediately
-    let autostart_manager = app.autolaunch();
-    if enabled {
-        let _ = autostart_manager.enable();
-    } else {
-        let _ = autostart_manager.disable();
-    }
-
-    // Notify frontend
-    let _ = app.emit(
-        "settings-changed",
-        serde_json::json!({
-            "setting": "autostart_enabled",
-            "value": enabled
-        }),
-    );
-
-    Ok(())
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn change_update_checks_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
-    settings.update_checks_enabled = enabled;
-    settings::write_settings(&app, settings);
-
-    let _ = app.emit(
-        "settings-changed",
-        serde_json::json!({
-            "setting": "update_checks_enabled",
-            "value": enabled
-        }),
-    );
-
-    Ok(())
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn change_mistral_transcription_base_url_setting(
-    app: AppHandle,
-    base_url: String,
-) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
-    settings.mistral_transcription_base_url = base_url;
-    settings::write_settings(&app, settings);
     Ok(())
 }
 
@@ -1102,32 +1001,6 @@ pub fn change_lazy_stream_close_setting(app: AppHandle, enabled: bool) -> Result
     let mut settings = settings::get_settings(&app);
     settings.lazy_stream_close = enabled;
     settings::write_settings(&app, settings);
-    Ok(())
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn change_app_language_setting(app: AppHandle, language: String) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
-    settings.app_language = language.clone();
-    settings::write_settings(&app, settings);
-
-    // Refresh the tray menu with the new language
-    tray::update_tray_menu(&app, &tray::TrayIconState::Idle, Some(&language));
-
-    Ok(())
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn change_show_tray_icon_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
-    settings.show_tray_icon = enabled;
-    settings::write_settings(&app, settings);
-
-    // Apply change immediately
-    tray::set_tray_visibility(&app, enabled);
-
     Ok(())
 }
 

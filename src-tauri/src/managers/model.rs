@@ -689,7 +689,11 @@ impl ModelManager {
 
     pub fn get_available_models(&self) -> Vec<ModelInfo> {
         let models = self.available_models.lock().unwrap();
-        models.values().cloned().collect()
+        models
+            .values()
+            .filter(|model| matches!(model.engine_type, EngineType::MistralApi))
+            .cloned()
+            .collect()
     }
 
     pub fn get_model_info(&self, model_id: &str) -> Option<ModelInfo> {
@@ -827,16 +831,18 @@ impl ModelManager {
     fn auto_select_model_if_needed(&self) -> Result<()> {
         let mut settings = get_settings(&self.app_handle);
 
-        // Clear stale selection: selected model is set but doesn't exist
-        // in available_models (e.g. deleted custom model file)
+        // Force old local-model selections back onto the hosted Mistral path.
         if !settings.selected_model.is_empty() {
             let models = self.available_models.lock().unwrap();
-            let exists = models.contains_key(&settings.selected_model);
+            let selected_model_allowed = models
+                .get(&settings.selected_model)
+                .map(|model| matches!(model.engine_type, EngineType::MistralApi))
+                .unwrap_or(false);
             drop(models);
 
-            if !exists {
+            if !selected_model_allowed {
                 info!(
-                    "Selected model '{}' not found in available models, clearing selection",
+                    "Selected model '{}' is no longer allowed, resetting to Mistral",
                     settings.selected_model
                 );
                 settings.selected_model = String::new();
@@ -844,11 +850,13 @@ impl ModelManager {
             }
         }
 
-        // If no model is selected, pick the first downloaded one
+        // If no model is selected, pick the hosted Mistral model.
         if settings.selected_model.is_empty() {
-            // Find the first available (downloaded) model
             let models = self.available_models.lock().unwrap();
-            if let Some(available_model) = models.values().find(|model| model.is_downloaded) {
+            if let Some(available_model) = models
+                .values()
+                .find(|model| matches!(model.engine_type, EngineType::MistralApi))
+            {
                 info!(
                     "Auto-selecting model: {} ({})",
                     available_model.id, available_model.name

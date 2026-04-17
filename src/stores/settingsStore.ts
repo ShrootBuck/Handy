@@ -64,8 +64,8 @@ interface SettingsStore {
   setCustomSounds: (sounds: { start: boolean; stop: boolean }) => void;
 }
 
-// Note: Default settings are now fetched from Rust via commands.getDefaultSettings()
-// This ensures platform-specific defaults (like overlay_position, shortcuts, paste_method) work correctly
+// Note: Default settings are now fetched from Rust via commands.getDefaultSettings().
+// This keeps frontend state aligned with backend-enforced defaults.
 
 const DEFAULT_AUDIO_DEVICE: AudioDevice = {
   index: "default",
@@ -83,13 +83,6 @@ const settingUpdaters: {
   audio_feedback_volume: (value) =>
     commands.changeAudioFeedbackVolumeSetting(value as number),
   sound_theme: (value) => commands.changeSoundThemeSetting(value as string),
-  start_hidden: (value) => commands.changeStartHiddenSetting(value as boolean),
-  autostart_enabled: (value) =>
-    commands.changeAutostartSetting(value as boolean),
-  update_checks_enabled: (value) =>
-    commands.changeUpdateChecksSetting(value as boolean),
-  mistral_transcription_base_url: (value) =>
-    commands.changeMistralTranscriptionBaseUrlSetting(value as string),
   mistral_transcription_api_key: (value) =>
     commands.changeMistralTranscriptionApiKeySetting(value as string),
   mistral_transcription_model: (value) =>
@@ -111,14 +104,10 @@ const settingUpdaters: {
         ? "default"
         : (value as string),
     ),
-  recording_retention_period: (value) =>
-    commands.updateRecordingRetentionPeriod(value as string),
   translate_to_english: (value) =>
     commands.changeTranslateToEnglishSetting(value as boolean),
   selected_language: (value) =>
     commands.changeSelectedLanguageSetting(value as string),
-  overlay_position: (value) =>
-    commands.changeOverlayPositionSetting(value as string),
   debug_mode: (value) => commands.changeDebugModeSetting(value as boolean),
   custom_words: (value) => commands.updateCustomWords(value as string[]),
   word_correction_threshold: (value) =>
@@ -134,7 +123,6 @@ const settingUpdaters: {
   auto_submit: (value) => commands.changeAutoSubmitSetting(value as boolean),
   auto_submit_key: (value) =>
     commands.changeAutoSubmitKeySetting(value as string),
-  history_limit: (value) => commands.updateHistoryLimit(value as number),
   post_process_enabled: (value) =>
     commands.changePostProcessEnabledSetting(value as boolean),
   post_process_selected_prompt_id: (value) =>
@@ -144,13 +132,10 @@ const settingUpdaters: {
   append_trailing_space: (value) =>
     commands.changeAppendTrailingSpaceSetting(value as boolean),
   log_level: (value) => commands.setLogLevel(value as any),
-  app_language: (value) => commands.changeAppLanguageSetting(value as string),
   experimental_enabled: (value) =>
     commands.changeExperimentalEnabledSetting(value as boolean),
   lazy_stream_close: (value) =>
     commands.changeLazyStreamCloseSetting(value as boolean),
-  show_tray_icon: (value) =>
-    commands.changeShowTrayIconSetting(value as boolean),
   whisper_accelerator: (value) =>
     commands.changeWhisperAcceleratorSetting(
       value as WhisperAcceleratorSetting,

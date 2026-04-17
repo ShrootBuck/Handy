@@ -163,6 +163,7 @@ pub enum RecordingRetentionPeriod {
     PreserveLimit,
     Days3,
     Weeks2,
+    Months1,
     Months3,
 }
 
@@ -469,7 +470,7 @@ pub struct AppSettings {
 }
 
 fn default_model() -> String {
-    "".to_string()
+    "voxtral-small-api".to_string()
 }
 
 fn default_always_on_microphone() -> bool {
@@ -481,11 +482,11 @@ fn default_translate_to_english() -> bool {
 }
 
 fn default_start_hidden() -> bool {
-    false
+    true
 }
 
 fn default_autostart_enabled() -> bool {
-    false
+    true
 }
 
 fn default_update_checks_enabled() -> bool {
@@ -509,10 +510,7 @@ fn default_mistral_transcription_model() -> String {
 }
 
 fn default_overlay_position() -> OverlayPosition {
-    #[cfg(target_os = "linux")]
-    return OverlayPosition::None;
-    #[cfg(not(target_os = "linux"))]
-    return OverlayPosition::Bottom;
+    OverlayPosition::Bottom
 }
 
 fn default_debug_mode() -> bool {
@@ -536,11 +534,11 @@ fn default_auto_submit() -> bool {
 }
 
 fn default_history_limit() -> usize {
-    5
+    10
 }
 
 fn default_recording_retention_period() -> RecordingRetentionPeriod {
-    RecordingRetentionPeriod::PreserveLimit
+    RecordingRetentionPeriod::Months1
 }
 
 fn default_audio_feedback_volume() -> f32 {
@@ -556,9 +554,7 @@ fn default_post_process_enabled() -> bool {
 }
 
 fn default_app_language() -> String {
-    tauri_plugin_os::locale()
-        .map(|l| l.replace('_', "-"))
-        .unwrap_or_else(|| "en".to_string())
+    "en".to_string()
 }
 
 fn default_show_tray_icon() -> bool {
@@ -777,6 +773,61 @@ fn clear_legacy_mistral_transcription_api_key(settings: &mut AppSettings) -> boo
     true
 }
 
+fn apply_locked_defaults(settings: &mut AppSettings) -> bool {
+    let mut changed = false;
+
+    if !settings.start_hidden {
+        settings.start_hidden = true;
+        changed = true;
+    }
+
+    if !settings.autostart_enabled {
+        settings.autostart_enabled = true;
+        changed = true;
+    }
+
+    if settings.update_checks_enabled {
+        settings.update_checks_enabled = false;
+        changed = true;
+    }
+
+    let mistral_base_url = default_mistral_transcription_base_url();
+    if settings.mistral_transcription_base_url != mistral_base_url {
+        settings.mistral_transcription_base_url = mistral_base_url;
+        changed = true;
+    }
+
+    if settings.overlay_position != OverlayPosition::Bottom {
+        settings.overlay_position = OverlayPosition::Bottom;
+        changed = true;
+    }
+
+    let history_limit = default_history_limit();
+    if settings.history_limit != history_limit {
+        settings.history_limit = history_limit;
+        changed = true;
+    }
+
+    let retention_period = default_recording_retention_period();
+    if settings.recording_retention_period != retention_period {
+        settings.recording_retention_period = retention_period;
+        changed = true;
+    }
+
+    let app_language = default_app_language();
+    if settings.app_language != app_language {
+        settings.app_language = app_language;
+        changed = true;
+    }
+
+    if !settings.show_tray_icon {
+        settings.show_tray_icon = true;
+        changed = true;
+    }
+
+    changed
+}
+
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
 pub fn get_default_settings() -> AppSettings {
@@ -843,7 +894,7 @@ pub fn get_default_settings() -> AppSettings {
         mistral_transcription_base_url: default_mistral_transcription_base_url(),
         mistral_transcription_api_key: default_mistral_transcription_api_key(),
         mistral_transcription_model: default_mistral_transcription_model(),
-        selected_model: "".to_string(),
+        selected_model: default_model(),
         always_on_microphone: false,
         selected_microphone: None,
         clamshell_microphone: None,
@@ -956,11 +1007,7 @@ pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
 
     let mut changed = ensure_post_process_defaults(&mut settings);
     changed |= clear_legacy_mistral_transcription_api_key(&mut settings);
-
-    if settings.update_checks_enabled {
-        settings.update_checks_enabled = false;
-        changed = true;
-    }
+    changed |= apply_locked_defaults(&mut settings);
 
     if changed {
         store.set("settings", serde_json::to_value(&settings).unwrap());
@@ -988,6 +1035,7 @@ pub fn get_settings(app: &AppHandle) -> AppSettings {
 
     let mut changed = ensure_post_process_defaults(&mut settings);
     changed |= clear_legacy_mistral_transcription_api_key(&mut settings);
+    changed |= apply_locked_defaults(&mut settings);
 
     if changed {
         store.set("settings", serde_json::to_value(&settings).unwrap());
@@ -996,10 +1044,14 @@ pub fn get_settings(app: &AppHandle) -> AppSettings {
     settings
 }
 
-pub fn write_settings(app: &AppHandle, settings: AppSettings) {
+pub fn write_settings(app: &AppHandle, mut settings: AppSettings) {
     let store = app
         .store(crate::portable::store_path(SETTINGS_STORE_PATH))
         .expect("Failed to initialize store");
+
+    let _ = ensure_post_process_defaults(&mut settings);
+    let _ = clear_legacy_mistral_transcription_api_key(&mut settings);
+    let _ = apply_locked_defaults(&mut settings);
 
     store.set("settings", serde_json::to_value(&settings).unwrap());
 }
