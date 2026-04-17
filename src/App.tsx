@@ -10,7 +10,6 @@ import {
 import { ModelStateEvent, RecordingErrorEvent } from "./lib/types/events";
 import "./App.css";
 import AccessibilityPermissions from "./components/AccessibilityPermissions";
-import Footer from "./components/footer";
 import { AccessibilityOnboarding } from "./components/onboarding";
 import { Sidebar, SidebarSection, SECTIONS_CONFIG } from "./components/Sidebar";
 import { useSettings } from "./hooks/useSettings";
@@ -252,8 +251,6 @@ function App() {
           </div>
         </div>
       </div>
-      {/* Fixed footer at bottom */}
-      <Footer />
     </div>
   );
 }

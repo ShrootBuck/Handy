@@ -369,7 +369,6 @@ impl std::ops::DerefMut for SecretString {
 pub struct AppSettings {
     pub bindings: HashMap<String, ShortcutBinding>,
     pub push_to_talk: bool,
-    pub audio_feedback: bool,
     #[serde(default = "default_audio_feedback_volume")]
     pub audio_feedback_volume: f32,
     #[serde(default = "default_sound_theme")]
@@ -378,14 +377,10 @@ pub struct AppSettings {
     pub start_hidden: bool,
     #[serde(default = "default_autostart_enabled")]
     pub autostart_enabled: bool,
-    #[serde(default = "default_update_checks_enabled")]
-    pub update_checks_enabled: bool,
     #[serde(default = "default_mistral_transcription_base_url")]
     pub mistral_transcription_base_url: String,
     #[serde(default = "default_mistral_transcription_api_key")]
     pub mistral_transcription_api_key: SecretString,
-    #[serde(default = "default_mistral_transcription_model")]
-    pub mistral_transcription_model: String,
     #[serde(default = "default_model")]
     pub selected_model: String,
     #[serde(default = "default_always_on_microphone")]
@@ -439,8 +434,6 @@ pub struct AppSettings {
     #[serde(default)]
     pub post_process_selected_prompt_id: Option<String>,
     #[serde(default)]
-    pub mute_while_recording: bool,
-    #[serde(default)]
     pub append_trailing_space: bool,
     #[serde(default = "default_app_language")]
     pub app_language: String,
@@ -489,10 +482,6 @@ fn default_autostart_enabled() -> bool {
     true
 }
 
-fn default_update_checks_enabled() -> bool {
-    false
-}
-
 fn default_selected_language() -> String {
     "auto".to_string()
 }
@@ -505,9 +494,7 @@ fn default_mistral_transcription_api_key() -> SecretString {
     SecretString(String::new())
 }
 
-fn default_mistral_transcription_model() -> String {
-    "voxtral-small-latest".to_string()
-}
+pub const LOCKED_MISTRAL_TRANSCRIPTION_MODEL: &str = "voxtral-small-latest";
 
 fn default_overlay_position() -> OverlayPosition {
     OverlayPosition::Bottom
@@ -786,11 +773,6 @@ fn apply_locked_defaults(settings: &mut AppSettings) -> bool {
         changed = true;
     }
 
-    if settings.update_checks_enabled {
-        settings.update_checks_enabled = false;
-        changed = true;
-    }
-
     let mistral_base_url = default_mistral_transcription_base_url();
     if settings.mistral_transcription_base_url != mistral_base_url {
         settings.mistral_transcription_base_url = mistral_base_url;
@@ -885,15 +867,12 @@ pub fn get_default_settings() -> AppSettings {
     AppSettings {
         bindings,
         push_to_talk: true,
-        audio_feedback: false,
         audio_feedback_volume: default_audio_feedback_volume(),
         sound_theme: default_sound_theme(),
         start_hidden: default_start_hidden(),
         autostart_enabled: default_autostart_enabled(),
-        update_checks_enabled: default_update_checks_enabled(),
         mistral_transcription_base_url: default_mistral_transcription_base_url(),
         mistral_transcription_api_key: default_mistral_transcription_api_key(),
-        mistral_transcription_model: default_mistral_transcription_model(),
         selected_model: default_model(),
         always_on_microphone: false,
         selected_microphone: None,
@@ -920,7 +899,6 @@ pub fn get_default_settings() -> AppSettings {
         post_process_models: default_post_process_models(),
         post_process_prompts: default_post_process_prompts(),
         post_process_selected_prompt_id: None,
-        mute_while_recording: false,
         append_trailing_space: false,
         app_language: default_app_language(),
         experimental_enabled: false,

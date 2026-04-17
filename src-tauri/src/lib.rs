@@ -211,17 +211,6 @@ fn initialize_core_logic(app_handle: &AppHandle) {
             "copy_last_transcript" => {
                 tray::copy_last_transcript(app);
             }
-            "unload_model" => {
-                let transcription_manager = app.state::<Arc<TranscriptionManager>>();
-                if !transcription_manager.is_model_loaded() {
-                    log::warn!("No model is currently loaded.");
-                    return;
-                }
-                match transcription_manager.unload_model() {
-                    Ok(()) => log::info!("Model unloaded via tray."),
-                    Err(e) => log::error!("Failed to unload model via tray: {}", e),
-                }
-            }
             "cancel" => {
                 use crate::utils::cancel_current_operation;
 
@@ -230,25 +219,6 @@ fn initialize_core_logic(app_handle: &AppHandle) {
             }
             "quit" => {
                 app.exit(0);
-            }
-            id if id.starts_with("model_select:") => {
-                let model_id = id.strip_prefix("model_select:").unwrap().to_string();
-                let current_model = settings::get_settings(app).selected_model;
-                if model_id == current_model {
-                    return;
-                }
-                let app_clone = app.clone();
-                std::thread::spawn(move || {
-                    match commands::models::switch_active_model(&app_clone, &model_id) {
-                        Ok(()) => {
-                            log::info!("Model switched to {} via tray.", model_id);
-                        }
-                        Err(e) => {
-                            log::error!("Failed to switch model via tray: {}", e);
-                        }
-                    }
-                    tray::update_tray_menu(&app_clone, &tray::TrayIconState::Idle, None);
-                });
             }
             _ => {}
         })
@@ -302,7 +272,6 @@ pub fn run(cli_args: CliArgs) {
             shortcut::change_binding,
             shortcut::reset_binding,
             shortcut::change_ptt_setting,
-            shortcut::change_audio_feedback_setting,
             shortcut::change_audio_feedback_volume_setting,
             shortcut::change_sound_theme_setting,
             shortcut::change_translate_to_english_setting,
@@ -332,11 +301,9 @@ pub fn run(cli_args: CliArgs) {
             shortcut::update_custom_words,
             shortcut::suspend_binding,
             shortcut::resume_binding,
-            shortcut::change_mute_while_recording_setting,
             shortcut::change_append_trailing_space_setting,
             shortcut::change_lazy_stream_close_setting,
             shortcut::change_mistral_transcription_api_key_setting,
-            shortcut::change_mistral_transcription_model_setting,
             shortcut::change_keyboard_implementation_setting,
             shortcut::get_keyboard_implementation,
             shortcut::change_whisper_accelerator_setting,
@@ -363,7 +330,6 @@ pub fn run(cli_args: CliArgs) {
             commands::models::cancel_download,
             commands::models::set_active_model,
             commands::models::get_current_model,
-            commands::models::get_transcription_model_status,
             commands::models::is_model_loading,
             commands::models::has_any_models_available,
             commands::models::has_any_models_or_downloads,
@@ -383,8 +349,6 @@ pub fn run(cli_args: CliArgs) {
             commands::audio::get_clamshell_microphone,
             commands::audio::is_recording,
             commands::transcription::set_model_unload_timeout,
-            commands::transcription::get_model_load_status,
-            commands::transcription::unload_model_manually,
             commands::history::get_history_entries,
             commands::history::toggle_history_entry_saved,
             commands::history::get_audio_file_path,

@@ -241,16 +241,8 @@ impl AudioRecordingManager {
 
     /* ---------- microphone life-cycle -------------------------------------- */
 
-    /// Applies mute if mute_while_recording is enabled and stream is open
     pub fn apply_mute(&self) {
-        let settings = get_settings(&self.app_handle);
-        let mut did_mute_guard = self.did_mute.lock().unwrap();
-
-        if settings.mute_while_recording && *self.is_open.lock().unwrap() {
-            set_mute(true);
-            *did_mute_guard = true;
-            debug!("Mute applied");
-        }
+        let _ = &self.app_handle;
     }
 
     /// Removes mute if it was applied

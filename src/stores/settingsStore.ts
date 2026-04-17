@@ -78,15 +78,11 @@ const settingUpdaters: {
 } = {
   always_on_microphone: (value) =>
     commands.updateMicrophoneMode(value as boolean),
-  audio_feedback: (value) =>
-    commands.changeAudioFeedbackSetting(value as boolean),
   audio_feedback_volume: (value) =>
     commands.changeAudioFeedbackVolumeSetting(value as number),
   sound_theme: (value) => commands.changeSoundThemeSetting(value as string),
   mistral_transcription_api_key: (value) =>
     commands.changeMistralTranscriptionApiKeySetting(value as string),
-  mistral_transcription_model: (value) =>
-    commands.changeMistralTranscriptionModelSetting(value as string),
   push_to_talk: (value) => commands.changePttSetting(value as boolean),
   selected_microphone: (value) =>
     commands.setSelectedMicrophone(
@@ -127,8 +123,6 @@ const settingUpdaters: {
     commands.changePostProcessEnabledSetting(value as boolean),
   post_process_selected_prompt_id: (value) =>
     commands.setPostProcessSelectedPrompt(value as string),
-  mute_while_recording: (value) =>
-    commands.changeMuteWhileRecordingSetting(value as boolean),
   append_trailing_space: (value) =>
     commands.changeAppendTrailingSpaceSetting(value as boolean),
   log_level: (value) => commands.setLogLevel(value as any),

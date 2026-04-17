@@ -479,15 +479,6 @@ pub fn change_ptt_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
 
 #[tauri::command]
 #[specta::specta]
-pub fn change_audio_feedback_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
-    settings.audio_feedback = enabled;
-    settings::write_settings(&app, settings);
-    Ok(())
-}
-
-#[tauri::command]
-#[specta::specta]
 pub fn change_audio_feedback_volume_setting(app: AppHandle, volume: f32) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
     settings.audio_feedback_volume = volume;
@@ -558,18 +549,6 @@ pub fn change_mistral_transcription_api_key_setting(
 ) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
     *settings.mistral_transcription_api_key = api_key;
-    settings::write_settings(&app, settings);
-    Ok(())
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn change_mistral_transcription_model_setting(
-    app: AppHandle,
-    model: String,
-) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
-    settings.mistral_transcription_model = model;
     settings::write_settings(&app, settings);
     Ok(())
 }
@@ -973,15 +952,6 @@ pub fn set_post_process_selected_prompt(app: AppHandle, id: String) -> Result<()
     }
 
     settings.post_process_selected_prompt_id = Some(id);
-    settings::write_settings(&app, settings);
-    Ok(())
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn change_mute_while_recording_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
-    settings.mute_while_recording = enabled;
     settings::write_settings(&app, settings);
     Ok(())
 }

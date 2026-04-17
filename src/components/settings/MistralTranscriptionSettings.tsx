@@ -9,50 +9,24 @@ export const MistralTranscriptionSettings: React.FC = () => {
   const { getSetting, updateSetting, isUpdating } = useSettings();
 
   const apiKey = getSetting("mistral_transcription_api_key") || "";
-  const model = getSetting("mistral_transcription_model") || "";
 
   return (
-    <>
-      <SettingContainer
-        title={t("settings.modelSettings.mistral.apiKey.title")}
-        description={t("settings.modelSettings.mistral.apiKey.description")}
-        descriptionMode="inline"
-        grouped={true}
-        layout="stacked"
-      >
-        <Input
-          type="password"
-          value={apiKey}
-          onChange={(event) =>
-            void updateSetting(
-              "mistral_transcription_api_key",
-              event.target.value,
-            )
-          }
-          disabled={isUpdating("mistral_transcription_api_key")}
-          className="w-full"
-        />
-      </SettingContainer>
-      <SettingContainer
-        title={t("settings.modelSettings.mistral.model.title")}
-        description={t("settings.modelSettings.mistral.model.description")}
-        descriptionMode="inline"
-        grouped={true}
-        layout="stacked"
-      >
-        <Input
-          type="text"
-          value={model}
-          onChange={(event) =>
-            void updateSetting(
-              "mistral_transcription_model",
-              event.target.value,
-            )
-          }
-          disabled={isUpdating("mistral_transcription_model")}
-          className="w-full"
-        />
-      </SettingContainer>
-    </>
+    <SettingContainer
+      title={t("settings.modelSettings.mistral.apiKey.title")}
+      description={t("settings.modelSettings.mistral.apiKey.description")}
+      descriptionMode="inline"
+      grouped={true}
+      layout="stacked"
+    >
+      <Input
+        type="password"
+        value={apiKey}
+        onChange={(event) =>
+          void updateSetting("mistral_transcription_api_key", event.target.value)
+        }
+        disabled={isUpdating("mistral_transcription_api_key")}
+        className="w-full"
+      />
+    </SettingContainer>
   );
 };

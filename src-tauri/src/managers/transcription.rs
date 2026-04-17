@@ -572,7 +572,7 @@ impl TranscriptionManager {
             let mistral_result = crate::llm_client::transcribe_with_mistral_blocking(
                 &settings.mistral_transcription_base_url,
                 &settings.mistral_transcription_api_key,
-                &settings.mistral_transcription_model,
+                crate::settings::LOCKED_MISTRAL_TRANSCRIPTION_MODEL,
                 wav_bytes,
                 language,
             )
