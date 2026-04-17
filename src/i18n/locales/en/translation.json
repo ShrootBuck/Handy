@@ -153,7 +153,21 @@
   "settings": {
     "modelSettings": {
       "title": "{{model}} Settings",
-      "noSettingsNeeded": "This model works automatically with no configuration needed."
+      "noSettingsNeeded": "This model works automatically with no configuration needed.",
+      "mistral": {
+        "baseUrl": {
+          "title": "Mistral Base URL",
+          "description": "OpenAI-compatible API base URL used for hosted transcription requests."
+        },
+        "apiKey": {
+          "title": "Mistral API Key",
+          "description": "API key used for hosted Voxtral transcription."
+        },
+        "model": {
+          "title": "Hosted Model ID",
+          "description": "Model sent to Mistral's hosted transcription API. Voxtral Small uses chat completions under the hood."
+        }
+      }
     },
     "general": {
       "title": "General",

@@ -8,6 +8,7 @@ use anyhow::Result;
 use log::{debug, error, info, warn};
 use serde::Serialize;
 use specta::Type;
+use std::io::Cursor;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, OnceLock};
@@ -73,6 +74,35 @@ pub struct TranscriptionManager {
     watcher_handle: Arc<Mutex<Option<thread::JoinHandle<()>>>>,
     is_loading: Arc<Mutex<bool>>,
     loading_condvar: Arc<Condvar>,
+}
+
+fn encode_wav(samples: &[f32]) -> Result<Vec<u8>> {
+    let mut cursor = Cursor::new(Vec::new());
+    let spec = hound::WavSpec {
+        channels: 1,
+        sample_rate: 16_000,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+
+    {
+        let mut writer = hound::WavWriter::new(&mut cursor, spec)
+            .map_err(|e| anyhow::anyhow!("Failed to create WAV writer: {}", e))?;
+
+        for sample in samples {
+            let clamped = sample.clamp(-1.0, 1.0);
+            let pcm = (clamped * i16::MAX as f32) as i16;
+            writer
+                .write_sample(pcm)
+                .map_err(|e| anyhow::anyhow!("Failed to write WAV sample: {}", e))?;
+        }
+
+        writer
+            .finalize()
+            .map_err(|e| anyhow::anyhow!("Failed to finalize WAV data: {}", e))?;
+    }
+
+    Ok(cursor.into_inner())
 }
 
 impl TranscriptionManager {
@@ -172,8 +202,19 @@ impl TranscriptionManager {
     }
 
     pub fn is_model_loaded(&self) -> bool {
-        let engine = self.lock_engine();
-        engine.is_some()
+        {
+            let engine = self.lock_engine();
+            if engine.is_some() {
+                return true;
+            }
+        }
+
+        let current_model = self.current_model_id.lock().unwrap();
+        current_model
+            .as_ref()
+            .and_then(|model_id| self.model_manager.get_model_info(model_id))
+            .map(|info| matches!(info.engine_type, EngineType::MistralApi))
+            .unwrap_or(false)
     }
 
     /// Atomically check whether a model load is in progress and, if not, mark
@@ -269,6 +310,31 @@ impl TranscriptionManager {
             .model_manager
             .get_model_info(model_id)
             .ok_or_else(|| anyhow::anyhow!("Model not found: {}", model_id))?;
+
+        if model_info.is_remote {
+            {
+                let mut engine = self.lock_engine();
+                *engine = None;
+            }
+            {
+                let mut current_model = self.current_model_id.lock().unwrap();
+                *current_model = Some(model_id.to_string());
+            }
+
+            self.touch_activity();
+
+            let _ = self.app_handle.emit(
+                "model-state-changed",
+                ModelStateEvent {
+                    event_type: "loading_completed".to_string(),
+                    model_id: Some(model_id.to_string()),
+                    model_name: Some(model_info.name.clone()),
+                    error: None,
+                },
+            );
+
+            return Ok(());
+        }
 
         if !model_info.is_downloaded {
             let error_msg = "Model not downloaded";
@@ -377,6 +443,7 @@ impl TranscriptionManager {
                 })?;
                 LoadedEngine::Cohere(engine)
             }
+            EngineType::MistralApi => unreachable!("remote models are handled before local load"),
         };
 
         // Update the current engine and model ID
@@ -458,6 +525,88 @@ impl TranscriptionManager {
             return Ok(String::new());
         }
 
+        // Get current settings for configuration
+        let settings = get_settings(&self.app_handle);
+        let model_info = self
+            .model_manager
+            .get_model_info(&settings.selected_model)
+            .ok_or_else(|| {
+                anyhow::anyhow!("Selected model not found: {}", settings.selected_model)
+            })?;
+
+        // Validate selected language against the model's supported languages.
+        // If the language isn't supported, fall back to "auto" to prevent errors.
+        let validated_language = if settings.selected_language == "auto" {
+            "auto".to_string()
+        } else {
+            let is_supported = model_info.supported_languages.is_empty()
+                || model_info
+                    .supported_languages
+                    .contains(&settings.selected_language);
+
+            if is_supported {
+                settings.selected_language.clone()
+            } else {
+                warn!(
+                    "Language '{}' not supported by current model, falling back to auto-detect",
+                    settings.selected_language
+                );
+                "auto".to_string()
+            }
+        };
+
+        if matches!(model_info.engine_type, EngineType::MistralApi) {
+            {
+                let mut current_model = self.current_model_id.lock().unwrap();
+                *current_model = Some(settings.selected_model.clone());
+            }
+
+            let language = match validated_language.as_str() {
+                "auto" => None,
+                "zh-Hans" | "zh-Hant" => Some("zh"),
+                other => Some(other),
+            };
+
+            let wav_bytes = encode_wav(&audio)?;
+
+            let mistral_result = crate::llm_client::transcribe_with_mistral_blocking(
+                &settings.mistral_transcription_base_url,
+                &settings.mistral_transcription_api_key,
+                &settings.mistral_transcription_model,
+                wav_bytes,
+                language,
+            )
+            .map_err(|e| anyhow::anyhow!(e))?;
+
+            let corrected_result = if !settings.custom_words.is_empty() {
+                apply_custom_words(
+                    &mistral_result,
+                    &settings.custom_words,
+                    settings.word_correction_threshold,
+                )
+            } else {
+                mistral_result
+            };
+
+            let filtered_result = filter_transcription_output(
+                &corrected_result,
+                &settings.app_language,
+                &settings.custom_filler_words,
+            );
+
+            let et = std::time::Instant::now();
+            info!("Transcription completed in {}ms", (et - st).as_millis());
+
+            if filtered_result.is_empty() {
+                info!("Transcription result is empty");
+            } else {
+                info!("Transcription result: {}", filtered_result);
+            }
+
+            self.maybe_unload_immediately("transcription");
+            return Ok(filtered_result);
+        }
+
         // Check if model is loaded, if not try to load it
         {
             // If the model is loading, wait for it to complete.
@@ -471,36 +620,6 @@ impl TranscriptionManager {
                 return Err(anyhow::anyhow!("Model is not loaded for transcription."));
             }
         }
-
-        // Get current settings for configuration
-        let settings = get_settings(&self.app_handle);
-
-        // Validate selected language against the model's supported languages.
-        // If the language isn't supported, fall back to "auto" to prevent errors.
-        let validated_language = if settings.selected_language == "auto" {
-            "auto".to_string()
-        } else {
-            let is_supported = self
-                .model_manager
-                .get_model_info(&settings.selected_model)
-                .map(|info| {
-                    info.supported_languages.is_empty()
-                        || info
-                            .supported_languages
-                            .contains(&settings.selected_language)
-                })
-                .unwrap_or(true);
-
-            if is_supported {
-                settings.selected_language.clone()
-            } else {
-                warn!(
-                    "Language '{}' not supported by current model, falling back to auto-detect",
-                    settings.selected_language
-                );
-                "auto".to_string()
-            }
-        };
 
         // Perform transcription with the appropriate engine.
         // We use catch_unwind to prevent engine panics from poisoning the mutex,
@@ -684,11 +803,7 @@ impl TranscriptionManager {
 
         // Apply word correction if custom words are configured.
         // Skip for Whisper models since custom words are already passed as initial_prompt.
-        let is_whisper = self
-            .model_manager
-            .get_model_info(&settings.selected_model)
-            .map(|info| matches!(info.engine_type, EngineType::Whisper))
-            .unwrap_or(false);
+        let is_whisper = matches!(model_info.engine_type, EngineType::Whisper);
 
         let corrected_result = if !settings.custom_words.is_empty() && !is_whisper {
             apply_custom_words(

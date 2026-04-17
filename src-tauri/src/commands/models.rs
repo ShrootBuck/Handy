@@ -90,7 +90,7 @@ pub fn switch_active_model(app: &AppHandle, model_id: &str) -> Result<(), String
         .get_model_info(model_id)
         .ok_or_else(|| format!("Model not found: {}", model_id))?;
 
-    if !model_info.is_downloaded {
+    if !model_info.is_downloaded && !model_info.is_remote {
         return Err(format!("Model not downloaded: {}", model_id));
     }
 
@@ -206,7 +206,7 @@ pub async fn has_any_models_or_downloads(
 ) -> Result<bool, String> {
     let models = model_manager.get_available_models();
     // Return true if any models are downloaded OR if any downloads are in progress
-    Ok(models.iter().any(|m| m.is_downloaded))
+    Ok(models.iter().any(|m| m.is_downloaded || m.is_remote))
 }
 
 #[tauri::command]

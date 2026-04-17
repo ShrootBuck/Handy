@@ -143,7 +143,10 @@ pub fn update_tray_menu(app: &AppHandle, state: &TrayIconState, locale: Option<&
     let models = model_manager.get_available_models();
     let current_model_id = &settings.selected_model;
 
-    let mut downloaded: Vec<_> = models.into_iter().filter(|m| m.is_downloaded).collect();
+    let mut downloaded: Vec<_> = models
+        .into_iter()
+        .filter(|m| m.is_downloaded || m.is_remote)
+        .collect();
     downloaded.sort_by(|a, b| a.name.cmp(&b.name));
 
     let submenu_label = downloaded

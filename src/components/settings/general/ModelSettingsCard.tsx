@@ -2,6 +2,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { SettingsGroup } from "../../ui/SettingsGroup";
 import { LanguageSelector } from "../LanguageSelector";
+import { MistralTranscriptionSettings } from "../MistralTranscriptionSettings";
 import { TranslateToEnglish } from "../TranslateToEnglish";
 import { useModelStore } from "../../../stores/modelStore";
 import type { ModelInfo } from "@/bindings";
@@ -15,7 +16,9 @@ export const ModelSettingsCard: React.FC = () => {
   const supportsLanguageSelection =
     currentModelInfo?.supports_language_selection ?? false;
   const supportsTranslation = currentModelInfo?.supports_translation ?? false;
-  const hasAnySettings = supportsLanguageSelection || supportsTranslation;
+  const isMistralApi = currentModelInfo?.engine_type === "MistralApi";
+  const hasAnySettings =
+    supportsLanguageSelection || supportsTranslation || isMistralApi;
 
   // Don't render anything if no model is selected or no settings available
   if (!currentModel || !currentModelInfo || !hasAnySettings) {
@@ -38,6 +41,7 @@ export const ModelSettingsCard: React.FC = () => {
       {supportsTranslation && (
         <TranslateToEnglish descriptionMode="tooltip" grouped={true} />
       )}
+      {isMistralApi && <MistralTranscriptionSettings />}
     </SettingsGroup>
   );
 };

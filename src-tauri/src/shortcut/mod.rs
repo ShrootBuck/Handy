@@ -641,6 +641,42 @@ pub fn change_update_checks_setting(app: AppHandle, enabled: bool) -> Result<(),
 
 #[tauri::command]
 #[specta::specta]
+pub fn change_mistral_transcription_base_url_setting(
+    app: AppHandle,
+    base_url: String,
+) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.mistral_transcription_base_url = base_url;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_mistral_transcription_api_key_setting(
+    app: AppHandle,
+    api_key: String,
+) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    *settings.mistral_transcription_api_key = api_key;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_mistral_transcription_model_setting(
+    app: AppHandle,
+    model: String,
+) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.mistral_transcription_model = model;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn update_custom_words(app: AppHandle, words: Vec<String>) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
     settings.custom_words = words;

@@ -27,6 +27,7 @@ pub enum EngineType {
     GigaAM,
     Canary,
     Cohere,
+    MistralApi,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -50,6 +51,7 @@ pub struct ModelInfo {
     pub supported_languages: Vec<String>, // Languages this model can transcribe
     pub supports_language_selection: bool, // Whether the user can explicitly pick a language
     pub is_custom: bool,            // Whether this is a user-provided custom model
+    pub is_remote: bool,            // Whether this model is hosted and not downloaded locally
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -147,6 +149,7 @@ impl ModelManager {
                 supported_languages: whisper_languages.clone(),
                 supports_language_selection: true,
                 is_custom: false,
+                is_remote: false,
             },
         );
 
@@ -175,6 +178,7 @@ impl ModelManager {
                 supported_languages: whisper_languages.clone(),
                 supports_language_selection: true,
                 is_custom: false,
+                is_remote: false,
             },
         );
 
@@ -202,6 +206,7 @@ impl ModelManager {
                 supported_languages: whisper_languages.clone(),
                 supports_language_selection: true,
                 is_custom: false,
+                is_remote: false,
             },
         );
 
@@ -229,6 +234,7 @@ impl ModelManager {
                 supported_languages: whisper_languages.clone(),
                 supports_language_selection: true,
                 is_custom: false,
+                is_remote: false,
             },
         );
 
@@ -257,6 +263,7 @@ impl ModelManager {
                 supported_languages: whisper_languages,
                 supports_language_selection: true,
                 is_custom: false,
+                is_remote: false,
             },
         );
 
@@ -285,6 +292,7 @@ impl ModelManager {
                 supported_languages: vec!["en".to_string()],
                 supports_language_selection: false,
                 is_custom: false,
+                is_remote: false,
             },
         );
 
@@ -322,6 +330,7 @@ impl ModelManager {
                 supported_languages: parakeet_v3_languages,
                 supports_language_selection: false,
                 is_custom: false,
+                is_remote: false,
             },
         );
 
@@ -349,6 +358,7 @@ impl ModelManager {
                 supported_languages: vec!["en".to_string()],
                 supports_language_selection: false,
                 is_custom: false,
+                is_remote: false,
             },
         );
 
@@ -378,6 +388,7 @@ impl ModelManager {
                 supported_languages: vec!["en".to_string()],
                 supports_language_selection: false,
                 is_custom: false,
+                is_remote: false,
             },
         );
 
@@ -407,6 +418,7 @@ impl ModelManager {
                 supported_languages: vec!["en".to_string()],
                 supports_language_selection: false,
                 is_custom: false,
+                is_remote: false,
             },
         );
 
@@ -436,6 +448,7 @@ impl ModelManager {
                 supported_languages: vec!["en".to_string()],
                 supports_language_selection: false,
                 is_custom: false,
+                is_remote: false,
             },
         );
 
@@ -471,6 +484,7 @@ impl ModelManager {
                 supported_languages: sense_voice_languages,
                 supports_language_selection: true,
                 is_custom: false,
+                is_remote: false,
             },
         );
 
@@ -501,6 +515,7 @@ impl ModelManager {
                 supported_languages: gigaam_languages,
                 supports_language_selection: false,
                 is_custom: false,
+                is_remote: false,
             },
         );
 
@@ -535,6 +550,7 @@ impl ModelManager {
                 supported_languages: canary_flash_languages,
                 supports_language_selection: true,
                 is_custom: false,
+                is_remote: false,
             },
         );
 
@@ -572,6 +588,7 @@ impl ModelManager {
                 supported_languages: canary_1b_languages,
                 supports_language_selection: true,
                 is_custom: false,
+                is_remote: false,
             },
         );
 
@@ -607,6 +624,38 @@ impl ModelManager {
                 supported_languages: cohere_languages,
                 supports_language_selection: true,
                 is_custom: false,
+                is_remote: false,
+            },
+        );
+
+        available_models.insert(
+            "voxtral-small-api".to_string(),
+            ModelInfo {
+                id: "voxtral-small-api".to_string(),
+                name: "Voxtral Small (Mistral API)".to_string(),
+                description:
+                    "Hosted transcription through Mistral's API. No local download required, but you must add your own API key in Settings."
+                        .to_string(),
+                filename: String::new(),
+                url: None,
+                sha256: None,
+                size_mb: 0,
+                is_downloaded: false,
+                is_downloading: false,
+                partial_size: 0,
+                is_directory: false,
+                engine_type: EngineType::MistralApi,
+                accuracy_score: 0.95,
+                speed_score: 0.80,
+                supports_translation: false,
+                is_recommended: false,
+                supported_languages: vec!["en", "es", "fr", "pt", "hi", "de", "nl", "it"]
+                    .into_iter()
+                    .map(String::from)
+                    .collect(),
+                supports_language_selection: true,
+                is_custom: false,
+                is_remote: true,
             },
         );
 
@@ -723,7 +772,11 @@ impl ModelManager {
         let mut models = self.available_models.lock().unwrap();
 
         for model in models.values_mut() {
-            if model.is_directory {
+            if model.is_remote {
+                model.is_downloaded = false;
+                model.is_downloading = false;
+                model.partial_size = 0;
+            } else if model.is_directory {
                 // For directory-based models, check if the directory exists
                 let model_path = self.models_dir.join(&model.filename);
                 let partial_path = self.models_dir.join(format!("{}.partial", &model.filename));
@@ -927,6 +980,7 @@ impl ModelManager {
                     supported_languages: vec![],
                     supports_language_selection: true,
                     is_custom: true,
+                    is_remote: false,
                 },
             );
         }
@@ -992,6 +1046,12 @@ impl ModelManager {
 
         let model_info =
             model_info.ok_or_else(|| anyhow::anyhow!("Model not found: {}", model_id))?;
+
+        if model_info.is_remote {
+            return Err(anyhow::anyhow!(
+                "This model is hosted remotely and does not need a local download."
+            ));
+        }
 
         let url = model_info
             .url
@@ -1337,6 +1397,10 @@ impl ModelManager {
 
         debug!("ModelManager: Found model info: {:?}", model_info);
 
+        if model_info.is_remote {
+            return Err(anyhow::anyhow!("Hosted models cannot be deleted."));
+        }
+
         let model_path = self.models_dir.join(&model_info.filename);
         let partial_path = self
             .models_dir
@@ -1520,6 +1584,7 @@ mod tests {
                 supported_languages: vec!["en".to_string()],
                 supports_language_selection: true,
                 is_custom: false,
+                is_remote: false,
             },
         );
 

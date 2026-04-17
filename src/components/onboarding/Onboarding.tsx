@@ -37,7 +37,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onModelSelected }) => {
     const stillExtracting = selectedModelId in extractingModels;
 
     if (
-      model?.is_downloaded &&
+      model &&
+      (model.is_downloaded || model.is_remote) &&
       !stillDownloading &&
       !stillVerifying &&
       !stillExtracting
@@ -62,8 +63,20 @@ const Onboarding: React.FC<OnboardingProps> = ({ onModelSelected }) => {
     onModelSelected,
   ]);
 
-  const handleDownloadModel = async (modelId: string) => {
+  const handleModelAction = async (modelId: string) => {
     setSelectedModelId(modelId);
+
+    const model = models.find((candidate) => candidate.id === modelId);
+    if (model?.is_remote) {
+      const success = await selectModel(modelId);
+      if (success) {
+        onModelSelected();
+      } else {
+        toast.error(t("onboarding.errors.selectModel"));
+        setSelectedModelId(null);
+      }
+      return;
+    }
 
     // Error toast is handled centrally by the model-download-failed event listener
     // in modelStore — no toast here to avoid duplicates.
@@ -74,9 +87,11 @@ const Onboarding: React.FC<OnboardingProps> = ({ onModelSelected }) => {
   };
 
   const getModelStatus = (modelId: string): ModelCardStatus => {
+    const model = models.find((candidate) => candidate.id === modelId);
     if (modelId in extractingModels) return "extracting";
     if (modelId in verifyingModels) return "verifying";
     if (modelId in downloadingModels) return "downloading";
+    if (model?.is_remote) return "available";
     return "downloadable";
   };
 
@@ -109,8 +124,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onModelSelected }) => {
                 variant="featured"
                 status={getModelStatus(model.id)}
                 disabled={isDownloading}
-                onSelect={handleDownloadModel}
-                onDownload={handleDownloadModel}
+                onSelect={handleModelAction}
+                onDownload={handleModelAction}
                 downloadProgress={getModelDownloadProgress(model.id)}
                 downloadSpeed={getModelDownloadSpeed(model.id)}
               />
@@ -129,8 +144,8 @@ const Onboarding: React.FC<OnboardingProps> = ({ onModelSelected }) => {
                 model={model}
                 status={getModelStatus(model.id)}
                 disabled={isDownloading}
-                onSelect={handleDownloadModel}
-                onDownload={handleDownloadModel}
+                onSelect={handleModelAction}
+                onDownload={handleModelAction}
                 downloadProgress={getModelDownloadProgress(model.id)}
                 downloadSpeed={getModelDownloadSpeed(model.id)}
               />

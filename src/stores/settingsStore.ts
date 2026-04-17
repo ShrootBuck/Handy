@@ -88,6 +88,12 @@ const settingUpdaters: {
     commands.changeAutostartSetting(value as boolean),
   update_checks_enabled: (value) =>
     commands.changeUpdateChecksSetting(value as boolean),
+  mistral_transcription_base_url: (value) =>
+    commands.changeMistralTranscriptionBaseUrlSetting(value as string),
+  mistral_transcription_api_key: (value) =>
+    commands.changeMistralTranscriptionApiKeySetting(value as string),
+  mistral_transcription_model: (value) =>
+    commands.changeMistralTranscriptionModelSetting(value as string),
   push_to_talk: (value) => commands.changePttSetting(value as boolean),
   selected_microphone: (value) =>
     commands.setSelectedMicrophone(

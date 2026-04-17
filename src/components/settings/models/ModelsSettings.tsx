@@ -92,7 +92,7 @@ export const ModelsSettings: React.FC = () => {
       return "active";
     }
     const model = models.find((m: ModelInfo) => m.id === modelId);
-    if (model?.is_downloaded) {
+    if (model?.is_downloaded || model?.is_remote) {
       return "available";
     }
     return "downloadable";
@@ -171,6 +171,7 @@ export const ModelsSettings: React.FC = () => {
     for (const model of filteredModels) {
       if (
         model.is_custom ||
+        model.id === currentModel ||
         model.is_downloaded ||
         model.id in downloadingModels ||
         model.id in extractingModels

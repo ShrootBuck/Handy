@@ -1,6 +1,7 @@
 use log::{debug, warn};
 use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
+use sha2::{Digest, Sha256};
 use specta::Type;
 use std::collections::HashMap;
 use std::fmt;
@@ -9,6 +10,8 @@ use tauri_plugin_store::StoreExt;
 
 pub const APPLE_INTELLIGENCE_PROVIDER_ID: &str = "apple_intelligence";
 pub const APPLE_INTELLIGENCE_DEFAULT_MODEL_ID: &str = "Apple Intelligence";
+const LEGACY_MISTRAL_TRANSCRIPTION_API_KEY_SHA256: &str =
+    "831d425f8d36527617bce8deb421ab2cc39c9fe9692270daf9b8c364918c45cb";
 
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, Type)]
 #[serde(rename_all = "lowercase")]
@@ -309,6 +312,10 @@ impl Default for OrtAcceleratorSetting {
 #[serde(transparent)]
 pub(crate) struct SecretMap(HashMap<String, String>);
 
+#[derive(Clone, Serialize, Deserialize, Type)]
+#[serde(transparent)]
+pub(crate) struct SecretString(String);
+
 impl fmt::Debug for SecretMap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let redacted: HashMap<&String, &str> = self
@@ -320,6 +327,16 @@ impl fmt::Debug for SecretMap {
     }
 }
 
+impl fmt::Debug for SecretString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0.is_empty() {
+            "".fmt(f)
+        } else {
+            "[REDACTED]".fmt(f)
+        }
+    }
+}
+
 impl std::ops::Deref for SecretMap {
     type Target = HashMap<String, String>;
     fn deref(&self) -> &Self::Target {
@@ -328,6 +345,19 @@ impl std::ops::Deref for SecretMap {
 }
 
 impl std::ops::DerefMut for SecretMap {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl std::ops::Deref for SecretString {
+    type Target = String;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for SecretString {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -349,6 +379,12 @@ pub struct AppSettings {
     pub autostart_enabled: bool,
     #[serde(default = "default_update_checks_enabled")]
     pub update_checks_enabled: bool,
+    #[serde(default = "default_mistral_transcription_base_url")]
+    pub mistral_transcription_base_url: String,
+    #[serde(default = "default_mistral_transcription_api_key")]
+    pub mistral_transcription_api_key: SecretString,
+    #[serde(default = "default_mistral_transcription_model")]
+    pub mistral_transcription_model: String,
     #[serde(default = "default_model")]
     pub selected_model: String,
     #[serde(default = "default_always_on_microphone")]
@@ -453,11 +489,23 @@ fn default_autostart_enabled() -> bool {
 }
 
 fn default_update_checks_enabled() -> bool {
-    true
+    false
 }
 
 fn default_selected_language() -> String {
     "auto".to_string()
+}
+
+fn default_mistral_transcription_base_url() -> String {
+    "https://api.mistral.ai/v1".to_string()
+}
+
+fn default_mistral_transcription_api_key() -> SecretString {
+    SecretString(String::new())
+}
+
+fn default_mistral_transcription_model() -> String {
+    "voxtral-small-latest".to_string()
 }
 
 fn default_overlay_position() -> OverlayPosition {
@@ -710,6 +758,25 @@ fn ensure_post_process_defaults(settings: &mut AppSettings) -> bool {
     changed
 }
 
+fn clear_legacy_mistral_transcription_api_key(settings: &mut AppSettings) -> bool {
+    if settings.mistral_transcription_api_key.is_empty() {
+        return false;
+    }
+
+    let key_hash = format!(
+        "{:x}",
+        Sha256::digest(settings.mistral_transcription_api_key.as_bytes())
+    );
+
+    if key_hash != LEGACY_MISTRAL_TRANSCRIPTION_API_KEY_SHA256 {
+        return false;
+    }
+
+    warn!("Clearing legacy shared Mistral transcription API key from settings");
+    settings.mistral_transcription_api_key.clear();
+    true
+}
+
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
 pub fn get_default_settings() -> AppSettings {
@@ -773,6 +840,9 @@ pub fn get_default_settings() -> AppSettings {
         start_hidden: default_start_hidden(),
         autostart_enabled: default_autostart_enabled(),
         update_checks_enabled: default_update_checks_enabled(),
+        mistral_transcription_base_url: default_mistral_transcription_base_url(),
+        mistral_transcription_api_key: default_mistral_transcription_api_key(),
+        mistral_transcription_model: default_mistral_transcription_model(),
         selected_model: "".to_string(),
         always_on_microphone: false,
         selected_microphone: None,
@@ -884,7 +954,15 @@ pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
         default_settings
     };
 
-    if ensure_post_process_defaults(&mut settings) {
+    let mut changed = ensure_post_process_defaults(&mut settings);
+    changed |= clear_legacy_mistral_transcription_api_key(&mut settings);
+
+    if settings.update_checks_enabled {
+        settings.update_checks_enabled = false;
+        changed = true;
+    }
+
+    if changed {
         store.set("settings", serde_json::to_value(&settings).unwrap());
     }
 
@@ -908,7 +986,10 @@ pub fn get_settings(app: &AppHandle) -> AppSettings {
         default_settings
     };
 
-    if ensure_post_process_defaults(&mut settings) {
+    let mut changed = ensure_post_process_defaults(&mut settings);
+    changed |= clear_legacy_mistral_transcription_api_key(&mut settings);
+
+    if changed {
         store.set("settings", serde_json::to_value(&settings).unwrap());
     }
 
@@ -984,6 +1065,14 @@ mod tests {
         let map = SecretMap(HashMap::from([("key".into(), "secret".into())]));
         let out = format!("{:?}", map);
         assert!(!out.contains("secret"));
+        assert!(out.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn secret_string_debug_redacts_values() {
+        let secret = SecretString("super-secret".into());
+        let out = format!("{:?}", secret);
+        assert!(!out.contains("super-secret"));
         assert!(out.contains("[REDACTED]"));
     }
 }
