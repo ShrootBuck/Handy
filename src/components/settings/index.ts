@@ -14,6 +14,5 @@ export { PushToTalk } from "./PushToTalk";
 export { GlobalShortcutInput } from "./GlobalShortcutInput";
 export { HandyKeysShortcutInput } from "./HandyKeysShortcutInput";
 export { ShortcutInput } from "./ShortcutInput";
-export { TranslateToEnglish } from "./TranslateToEnglish";
 export { CustomWords } from "./CustomWords";
 export { ModelUnloadTimeoutSetting } from "./ModelUnloadTimeout";

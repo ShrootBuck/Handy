@@ -629,9 +629,9 @@ impl ModelManager {
         );
 
         available_models.insert(
-            "voxtral-small-api".to_string(),
+            "voxtral-small-2507".to_string(),
             ModelInfo {
-                id: "voxtral-small-api".to_string(),
+                id: "voxtral-small-2507".to_string(),
                 name: "Voxtral Small (Mistral API)".to_string(),
                 description:
                     "Hosted transcription through Mistral's API. No local download required, but you must add your own API key in Settings."

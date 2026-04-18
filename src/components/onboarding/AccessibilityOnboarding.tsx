@@ -9,6 +9,7 @@ import {
 } from "tauri-plugin-macos-permissions-api";
 import { toast } from "sonner";
 import { commands } from "@/bindings";
+import { hasMacOSAccessibilityPermission } from "@/lib/macosAccessibility";
 import { useSettingsStore } from "@/stores/settingsStore";
 import HandyTextLogo from "../icons/HandyTextLogo";
 import { Keyboard, Mic, Check, Loader2 } from "lucide-react";
@@ -96,21 +97,9 @@ const AccessibilityOnboarding: React.FC<AccessibilityOnboardingProps> = ({
       if (nextPlatform === "macos") {
         try {
           const [accessibilityGranted, microphoneGranted] = await Promise.all([
-            checkAccessibilityPermission(),
+            hasMacOSAccessibilityPermission(),
             checkMicrophonePermission(),
           ]);
-
-          // If accessibility is granted, initialize Enigo and shortcuts
-          if (accessibilityGranted) {
-            try {
-              await Promise.all([
-                commands.initializeEnigo(),
-                commands.initializeShortcuts(),
-              ]);
-            } catch (e) {
-              console.warn("Failed to initialize after permission grant:", e);
-            }
-          }
 
           const newState: PermissionsState = {
             accessibility: accessibilityGranted ? "granted" : "needed",
@@ -183,7 +172,7 @@ const AccessibilityOnboarding: React.FC<AccessibilityOnboardingProps> = ({
         }
 
         const [accessibilityGranted, microphoneGranted] = await Promise.all([
-          checkAccessibilityPermission(),
+          hasMacOSAccessibilityPermission(),
           checkMicrophonePermission(),
         ]);
 
@@ -192,13 +181,6 @@ const AccessibilityOnboarding: React.FC<AccessibilityOnboardingProps> = ({
 
           if (accessibilityGranted && prev.accessibility !== "granted") {
             newState.accessibility = "granted";
-            // Initialize Enigo and shortcuts when accessibility is granted
-            Promise.all([
-              commands.initializeEnigo(),
-              commands.initializeShortcuts(),
-            ]).catch((e) => {
-              console.warn("Failed to initialize after permission grant:", e);
-            });
           }
 
           if (microphoneGranted && prev.microphone !== "granted") {

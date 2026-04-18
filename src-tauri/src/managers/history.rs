@@ -112,7 +112,13 @@ impl HistoryManager {
         debug!("Database version before migration: {}", version_before);
 
         // Apply any pending migrations
-        migrations.to_latest(&mut conn)?;
+        if let Err(e) = migrations.to_latest(&mut conn) {
+            if e.to_string().contains("too high") || e.to_string().contains("TooFarAhead") {
+                log::warn!("Database version is higher than migrations. Ignoring: {}", e);
+            } else {
+                return Err(e.into());
+            }
+        }
 
         // Get version after migration
         let version_after: i32 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
@@ -433,7 +439,7 @@ impl HistoryManager {
             (Some(cursor_id), Some(lim)) => {
                 let fetch_count = (lim + 1) as i64;
                 let mut stmt = conn.prepare(
-                    "SELECT id, file_name, timestamp, saved, title, transcription_text, post_processed_text, post_process_prompt, post_process_requested
+                    "SELECT id, file_name, timestamp, saved, title, transcription_text
                      FROM transcription_history
                      WHERE id < ?1
                      ORDER BY id DESC
@@ -447,7 +453,7 @@ impl HistoryManager {
             (None, Some(lim)) => {
                 let fetch_count = (lim + 1) as i64;
                 let mut stmt = conn.prepare(
-                    "SELECT id, file_name, timestamp, saved, title, transcription_text, post_processed_text, post_process_prompt, post_process_requested
+                    "SELECT id, file_name, timestamp, saved, title, transcription_text
                      FROM transcription_history
                      ORDER BY id DESC
                      LIMIT ?1",
@@ -459,7 +465,7 @@ impl HistoryManager {
             }
             (_, None) => {
                 let mut stmt = conn.prepare(
-                    "SELECT id, file_name, timestamp, saved, title, transcription_text, post_processed_text, post_process_prompt, post_process_requested
+                    "SELECT id, file_name, timestamp, saved, title, transcription_text
                      FROM transcription_history
                      ORDER BY id DESC",
                 )?;
@@ -487,10 +493,7 @@ impl HistoryManager {
                 timestamp,
                 saved,
                 title,
-                transcription_text,
-                post_processed_text,
-                post_process_prompt,
-                post_process_requested
+                transcription_text
              FROM transcription_history
              ORDER BY timestamp DESC
              LIMIT 1",
@@ -514,10 +517,7 @@ impl HistoryManager {
                 timestamp,
                 saved,
                 title,
-                transcription_text,
-                post_processed_text,
-                post_process_prompt,
-                post_process_requested
+                transcription_text
              FROM transcription_history
              WHERE transcription_text != ''
              ORDER BY timestamp DESC
@@ -568,10 +568,7 @@ impl HistoryManager {
                 timestamp,
                 saved,
                 title,
-                transcription_text,
-                post_processed_text,
-                post_process_prompt,
-                post_process_requested
+                transcription_text
              FROM transcription_history
              WHERE id = ?1",
         )?;
@@ -637,10 +634,7 @@ mod tests {
                 timestamp INTEGER NOT NULL,
                 saved BOOLEAN NOT NULL DEFAULT 0,
                 title TEXT NOT NULL,
-                transcription_text TEXT NOT NULL,
-                post_processed_text TEXT,
-                post_process_prompt TEXT,
-                post_process_requested BOOLEAN NOT NULL DEFAULT 0
+                transcription_text TEXT NOT NULL
             );",
         )
         .expect("create transcription_history table");

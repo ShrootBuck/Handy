@@ -15,6 +15,7 @@ import { Sidebar, SidebarSection, SECTIONS_CONFIG } from "./components/Sidebar";
 import { useSettings } from "./hooks/useSettings";
 import { useSettingsStore } from "./stores/settingsStore";
 import { commands } from "@/bindings";
+import { hasMacOSAccessibilityPermission } from "@/lib/macosAccessibility";
 import { getLanguageDirection, initializeRTL } from "@/lib/utils/rtl";
 
 type OnboardingStep = "accessibility" | "done";
@@ -168,7 +169,7 @@ function App() {
       if (currentPlatform === "macos") {
         try {
           const [hasAccessibility, hasMicrophone] = await Promise.all([
-            checkAccessibilityPermission(),
+            hasMacOSAccessibilityPermission(),
             checkMicrophonePermission(),
           ]);
           if (!hasAccessibility || !hasMicrophone) {

@@ -399,7 +399,7 @@ pub struct AppSettings {
 }
 
 fn default_model() -> String {
-    "voxtral-small-api".to_string()
+    "voxtral-small-2507".to_string()
 }
 
 fn default_always_on_microphone() -> bool {
@@ -426,7 +426,7 @@ fn default_mistral_transcription_api_key() -> SecretString {
     SecretString(String::new())
 }
 
-pub const LOCKED_MISTRAL_TRANSCRIPTION_MODEL: &str = "voxtral-small-latest";
+pub const LOCKED_MISTRAL_TRANSCRIPTION_MODEL: &str = "voxtral-small-2507";
 
 fn default_overlay_position() -> OverlayPosition {
     OverlayPosition::Bottom
@@ -563,6 +563,48 @@ pub fn get_default_settings() -> AppSettings {
     }
 }
 
+fn sanitize_settings(mut settings: AppSettings) -> (AppSettings, bool) {
+    let original = serde_json::to_value(&settings).ok();
+    let defaults = get_default_settings();
+
+    // Keep only the bindings that are still represented in the current UI,
+    // but preserve the user's chosen shortcuts for those bindings.
+    let mut sanitized_bindings = defaults.bindings.clone();
+    for (binding_id, binding) in sanitized_bindings.iter_mut() {
+        if let Some(existing_binding) = settings.bindings.get(binding_id) {
+            binding.current_binding = existing_binding.current_binding.clone();
+        }
+    }
+    settings.bindings = sanitized_bindings;
+
+    // Purge persisted values for settings that are no longer exposed in the
+    // current UI, and hard-pin internal model/base URL state to the fork's
+    // intended Mistral-only configuration.
+    settings.start_hidden = defaults.start_hidden;
+    settings.autostart_enabled = defaults.autostart_enabled;
+    settings.mistral_transcription_base_url = defaults.mistral_transcription_base_url.clone();
+    settings.selected_model = defaults.selected_model.clone();
+    settings.selected_language = defaults.selected_language.clone();
+    settings.overlay_position = defaults.overlay_position;
+    settings.debug_mode = defaults.debug_mode;
+    settings.custom_words = defaults.custom_words.clone();
+    settings.model_unload_timeout = defaults.model_unload_timeout;
+    settings.history_limit = defaults.history_limit;
+    settings.recording_retention_period = defaults.recording_retention_period;
+    settings.app_language = defaults.app_language.clone();
+    settings.experimental_enabled = defaults.experimental_enabled;
+    settings.lazy_stream_close = defaults.lazy_stream_close;
+    settings.keyboard_implementation = defaults.keyboard_implementation;
+    settings.show_tray_icon = defaults.show_tray_icon;
+    settings.custom_filler_words = defaults.custom_filler_words.clone();
+    settings.whisper_accelerator = defaults.whisper_accelerator;
+    settings.ort_accelerator = defaults.ort_accelerator;
+    settings.whisper_gpu_device = defaults.whisper_gpu_device;
+
+    let changed = original != serde_json::to_value(&settings).ok();
+    (settings, changed)
+}
+
 pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
     // Initialize store
     let store = app
@@ -586,8 +628,10 @@ pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
                     }
                 }
 
-                if updated {
-                    debug!("Settings updated with new bindings");
+                let (settings, sanitized) = sanitize_settings(settings);
+
+                if updated || sanitized {
+                    debug!("Settings updated during load");
                     store.set("settings", serde_json::to_value(&settings).unwrap());
                 }
 
@@ -616,11 +660,17 @@ pub fn get_settings(app: &AppHandle) -> AppSettings {
         .expect("Failed to initialize store");
 
     let settings = if let Some(settings_value) = store.get("settings") {
-        serde_json::from_value::<AppSettings>(settings_value).unwrap_or_else(|_| {
+        let settings = serde_json::from_value::<AppSettings>(settings_value).unwrap_or_else(|_| {
             let default_settings = get_default_settings();
             store.set("settings", serde_json::to_value(&default_settings).unwrap());
             default_settings
-        })
+        });
+
+        let (sanitized_settings, changed) = sanitize_settings(settings);
+        if changed {
+            store.set("settings", serde_json::to_value(&sanitized_settings).unwrap());
+        }
+        sanitized_settings
     } else {
         let default_settings = get_default_settings();
         store.set("settings", serde_json::to_value(&default_settings).unwrap());
