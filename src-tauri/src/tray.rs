@@ -169,10 +169,7 @@ pub fn update_tray_menu(app: &AppHandle, state: &TrayIconState, locale: Option<&
 }
 
 fn last_transcript_text(entry: &HistoryEntry) -> &str {
-    entry
-        .post_processed_text
-        .as_deref()
-        .unwrap_or(&entry.transcription_text)
+    &entry.transcription_text
 }
 
 pub fn set_tray_visibility(app: &AppHandle, visible: bool) {
@@ -220,7 +217,7 @@ mod tests {
     use super::last_transcript_text;
     use crate::managers::history::HistoryEntry;
 
-    fn build_entry(transcription: &str, post_processed: Option<&str>) -> HistoryEntry {
+    fn build_entry(transcription: &str) -> HistoryEntry {
         HistoryEntry {
             id: 1,
             file_name: "handy-1.wav".to_string(),
@@ -228,21 +225,12 @@ mod tests {
             saved: false,
             title: "Recording".to_string(),
             transcription_text: transcription.to_string(),
-            post_processed_text: post_processed.map(|text| text.to_string()),
-            post_process_prompt: None,
-            post_process_requested: false,
         }
     }
 
     #[test]
-    fn uses_post_processed_text_when_available() {
-        let entry = build_entry("raw", Some("processed"));
-        assert_eq!(last_transcript_text(&entry), "processed");
-    }
-
-    #[test]
-    fn falls_back_to_raw_transcription() {
-        let entry = build_entry("raw", None);
+    fn uses_transcription_text() {
+        let entry = build_entry("raw");
         assert_eq!(last_transcript_text(&entry), "raw");
     }
 }

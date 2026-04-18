@@ -661,7 +661,6 @@ impl TranscriptionManager {
 
                             let params = WhisperInferenceParams {
                                 language: whisper_language,
-                                translate: settings.translate_to_english,
                                 initial_prompt: if settings.custom_words.is_empty() {
                                     None
                                 } else {
@@ -723,7 +722,6 @@ impl TranscriptionManager {
                             };
                             let options = TranscribeOptions {
                                 language: lang,
-                                translate: settings.translate_to_english,
                                 ..Default::default()
                             };
                             canary_engine
@@ -823,15 +821,9 @@ impl TranscriptionManager {
         );
 
         let et = std::time::Instant::now();
-        let translation_note = if settings.translate_to_english {
-            " (translated)"
-        } else {
-            ""
-        };
         info!(
-            "Transcription completed in {}ms{}",
-            (et - st).as_millis(),
-            translation_note
+            "Transcription completed in {}ms",
+            (et - st).as_millis()
         );
 
         let final_result = filtered_result;
