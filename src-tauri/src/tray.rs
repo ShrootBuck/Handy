@@ -1,6 +1,4 @@
 use crate::managers::history::{HistoryEntry, HistoryManager};
-use crate::settings;
-use crate::tray_i18n::get_tray_translations;
 use log::{error, info, warn};
 use std::sync::Arc;
 use tauri::image::Image;
@@ -75,8 +73,7 @@ pub fn change_tray_icon(app: &AppHandle, icon: TrayIconState) {
         .expect("failed to set icon"),
     ));
 
-    // Update menu based on state
-    update_tray_menu(app, &icon, None);
+    update_tray_menu(app, &icon);
 }
 
 pub fn tray_tooltip() -> String {
@@ -91,12 +88,7 @@ fn version_label() -> String {
     }
 }
 
-pub fn update_tray_menu(app: &AppHandle, state: &TrayIconState, locale: Option<&str>) {
-    let settings = settings::get_settings(app);
-
-    let locale = locale.unwrap_or(&settings.app_language);
-    let strings = get_tray_translations(Some(locale.to_string()));
-
+pub fn update_tray_menu(app: &AppHandle, state: &TrayIconState) {
     // Platform-specific accelerators
     #[cfg(target_os = "macos")]
     let (settings_accelerator, quit_accelerator) = (Some("Cmd+,"), Some("Cmd+Q"));
@@ -110,7 +102,7 @@ pub fn update_tray_menu(app: &AppHandle, state: &TrayIconState, locale: Option<&
     let settings_i = MenuItem::with_id(
         app,
         "settings",
-        &strings.settings,
+        "Settings",
         true,
         settings_accelerator,
     )
@@ -118,18 +110,18 @@ pub fn update_tray_menu(app: &AppHandle, state: &TrayIconState, locale: Option<&
     let copy_last_transcript_i = MenuItem::with_id(
         app,
         "copy_last_transcript",
-        &strings.copy_last_transcript,
+        "Copy Last Transcript",
         true,
         None::<&str>,
     )
     .expect("failed to create copy last transcript item");
-    let quit_i = MenuItem::with_id(app, "quit", &strings.quit, true, quit_accelerator)
+    let quit_i = MenuItem::with_id(app, "quit", "Quit", true, quit_accelerator)
         .expect("failed to create quit item");
     let separator = || PredefinedMenuItem::separator(app).expect("failed to create separator");
 
     let menu = match state {
         TrayIconState::Recording | TrayIconState::Transcribing => {
-            let cancel_i = MenuItem::with_id(app, "cancel", &strings.cancel, true, None::<&str>)
+            let cancel_i = MenuItem::with_id(app, "cancel", "Cancel", true, None::<&str>)
                 .expect("failed to create cancel item");
             Menu::with_items(
                 app,

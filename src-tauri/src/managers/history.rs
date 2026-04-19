@@ -10,13 +10,8 @@ use std::path::PathBuf;
 use tauri::AppHandle;
 use tauri_specta::Event;
 
-/// Database migrations for transcription history.
-/// Each migration is applied in order. The library tracks which migrations
-/// have been applied using SQLite's user_version pragma.
-///
-/// Note: For users upgrading from tauri-plugin-sql, migrate_from_tauri_plugin_sql()
-/// converts the old _sqlx_migrations table tracking to the user_version pragma,
-/// ensuring migrations don't re-run on existing databases.
+const HISTORY_LIMIT: usize = 10;
+
 static MIGRATIONS: &[M] = &[M::up(
     "CREATE TABLE IF NOT EXISTS transcription_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,23 +88,15 @@ impl HistoryManager {
 
         let mut conn = Connection::open(&self.db_path)?;
 
-        // Handle migration from tauri-plugin-sql to rusqlite_migration
-        // tauri-plugin-sql used _sqlx_migrations table, rusqlite_migration uses user_version pragma
-        self.migrate_from_tauri_plugin_sql(&conn)?;
-
-        // Create migrations object and run to latest version
         let migrations = Migrations::new(MIGRATIONS.to_vec());
 
-        // Validate migrations in debug builds
         #[cfg(debug_assertions)]
         migrations.validate().expect("Invalid migrations");
 
-        // Get current version before migration
         let version_before: i32 =
             conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
         debug!("Database version before migration: {}", version_before);
 
-        // Apply any pending migrations
         if let Err(e) = migrations.to_latest(&mut conn) {
             if e.to_string().contains("too high") || e.to_string().contains("TooFarAhead") {
                 log::warn!(
@@ -121,7 +108,6 @@ impl HistoryManager {
             }
         }
 
-        // Get version after migration
         let version_after: i32 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
 
         if version_after > version_before {
@@ -135,64 +121,6 @@ impl HistoryManager {
 
         Ok(())
     }
-
-    /// Migrate from tauri-plugin-sql's migration tracking to rusqlite_migration's.
-    /// tauri-plugin-sql used a _sqlx_migrations table, while rusqlite_migration uses
-    /// SQLite's user_version pragma. This function checks if the old system was in use
-    /// and sets the user_version accordingly so migrations don't re-run.
-    fn migrate_from_tauri_plugin_sql(&self, conn: &Connection) -> Result<()> {
-        // Check if the old _sqlx_migrations table exists
-        let has_sqlx_migrations: bool = conn
-            .query_row(
-                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type='table' AND name='_sqlx_migrations'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap_or(false);
-
-        if !has_sqlx_migrations {
-            return Ok(());
-        }
-
-        // Check current user_version
-        let current_version: i32 =
-            conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
-
-        if current_version > 0 {
-            // Already migrated to rusqlite_migration system
-            return Ok(());
-        }
-
-        // Get the highest version from the old migrations table
-        let old_version: i32 = conn
-            .query_row(
-                "SELECT COALESCE(MAX(version), 0) FROM _sqlx_migrations WHERE success = 1",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap_or(0);
-
-        if old_version > 0 {
-            info!(
-                "Migrating from tauri-plugin-sql (version {}) to rusqlite_migration",
-                old_version
-            );
-
-            // Set user_version to match the old migration state
-            conn.pragma_update(None, "user_version", old_version)?;
-
-            // Optionally drop the old migrations table (keeping it doesn't hurt)
-            // conn.execute("DROP TABLE IF EXISTS _sqlx_migrations", [])?;
-
-            info!(
-                "Migration tracking converted: user_version set to {}",
-                old_version
-            );
-        }
-
-        Ok(())
-    }
-
     fn get_connection(&self) -> Result<Connection> {
         Ok(Connection::open(&self.db_path)?)
     }
@@ -298,23 +226,7 @@ impl HistoryManager {
     }
 
     pub fn cleanup_old_entries(&self) -> Result<()> {
-        let retention_period = crate::settings::get_recording_retention_period(&self.app_handle);
-
-        match retention_period {
-            crate::settings::RecordingRetentionPeriod::Never => {
-                // Don't delete anything
-                return Ok(());
-            }
-            crate::settings::RecordingRetentionPeriod::PreserveLimit => {
-                // Use the old count-based logic with history_limit
-                let limit = crate::settings::get_history_limit(&self.app_handle);
-                return self.cleanup_by_count(limit);
-            }
-            _ => {
-                // Use time-based logic
-                return self.cleanup_by_time(retention_period);
-            }
-        }
+        self.cleanup_by_count(HISTORY_LIMIT)
     }
 
     fn delete_entries_and_files(&self, entries: &[(i64, String)]) -> Result<usize> {
@@ -371,48 +283,6 @@ impl HistoryManager {
             if deleted_count > 0 {
                 debug!("Cleaned up {} old history entries by count", deleted_count);
             }
-        }
-
-        Ok(())
-    }
-
-    fn cleanup_by_time(
-        &self,
-        retention_period: crate::settings::RecordingRetentionPeriod,
-    ) -> Result<()> {
-        let conn = self.get_connection()?;
-
-        // Calculate cutoff timestamp (current time minus retention period)
-        let now = Utc::now().timestamp();
-        let cutoff_timestamp = match retention_period {
-            crate::settings::RecordingRetentionPeriod::Days3 => now - (3 * 24 * 60 * 60), // 3 days in seconds
-            crate::settings::RecordingRetentionPeriod::Weeks2 => now - (2 * 7 * 24 * 60 * 60), // 2 weeks in seconds
-            crate::settings::RecordingRetentionPeriod::Months1 => now - (30 * 24 * 60 * 60), // 1 month in seconds (approximate)
-            crate::settings::RecordingRetentionPeriod::Months3 => now - (3 * 30 * 24 * 60 * 60), // 3 months in seconds (approximate)
-            _ => unreachable!("Should not reach here"),
-        };
-
-        // Get all unsaved entries older than the cutoff timestamp
-        let mut stmt = conn.prepare(
-            "SELECT id, file_name FROM transcription_history WHERE saved = 0 AND timestamp < ?1",
-        )?;
-
-        let rows = stmt.query_map(params![cutoff_timestamp], |row| {
-            Ok((row.get::<_, i64>("id")?, row.get::<_, String>("file_name")?))
-        })?;
-
-        let mut entries_to_delete: Vec<(i64, String)> = Vec::new();
-        for row in rows {
-            entries_to_delete.push(row?);
-        }
-
-        let deleted_count = self.delete_entries_and_files(&entries_to_delete)?;
-
-        if deleted_count > 0 {
-            debug!(
-                "Cleaned up {} old history entries based on retention period",
-                deleted_count
-            );
         }
 
         Ok(())

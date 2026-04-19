@@ -1,5 +1,5 @@
 use crate::audio_toolkit::audio::{list_input_devices, list_output_devices};
-use crate::managers::audio::{AudioRecordingManager, MicrophoneMode};
+use crate::managers::audio::AudioRecordingManager;
 use crate::settings::{get_settings, write_settings};
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -129,33 +129,6 @@ pub fn open_microphone_privacy_settings() -> Result<(), String> {
 
 #[tauri::command]
 #[specta::specta]
-pub fn update_microphone_mode(app: AppHandle, always_on: bool) -> Result<(), String> {
-    // Update settings
-    let mut settings = get_settings(&app);
-    settings.always_on_microphone = always_on;
-    write_settings(&app, settings);
-
-    // Update the audio manager mode
-    let rm = app.state::<Arc<AudioRecordingManager>>();
-    let new_mode = if always_on {
-        MicrophoneMode::AlwaysOn
-    } else {
-        MicrophoneMode::OnDemand
-    };
-
-    rm.update_mode(new_mode)
-        .map_err(|e| format!("Failed to update microphone mode: {}", e))
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn get_microphone_mode(app: AppHandle) -> Result<bool, String> {
-    let settings = get_settings(&app);
-    Ok(settings.always_on_microphone)
-}
-
-#[tauri::command]
-#[specta::specta]
 pub fn get_available_microphones() -> Result<Vec<AudioDevice>, String> {
     let devices =
         list_input_devices().map_err(|e| format!("Failed to list audio devices: {}", e))?;
@@ -169,7 +142,7 @@ pub fn get_available_microphones() -> Result<Vec<AudioDevice>, String> {
     result.extend(devices.into_iter().map(|d| AudioDevice {
         index: d.index,
         name: d.name,
-        is_default: false, // The explicit default is handled separately
+        is_default: false,
     }));
 
     Ok(result)
@@ -186,21 +159,11 @@ pub fn set_selected_microphone(app: AppHandle, device_name: String) -> Result<()
     };
     write_settings(&app, settings);
 
-    // Update the audio manager to use the new device
     let rm = app.state::<Arc<AudioRecordingManager>>();
     rm.update_selected_device()
         .map_err(|e| format!("Failed to update selected device: {}", e))?;
 
     Ok(())
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn get_selected_microphone(app: AppHandle) -> Result<String, String> {
-    let settings = get_settings(&app);
-    Ok(settings
-        .selected_microphone
-        .unwrap_or_else(|| "default".to_string()))
 }
 
 #[tauri::command]
@@ -218,7 +181,7 @@ pub fn get_available_output_devices() -> Result<Vec<AudioDevice>, String> {
     result.extend(devices.into_iter().map(|d| AudioDevice {
         index: d.index,
         name: d.name,
-        is_default: false, // The explicit default is handled separately
+        is_default: false,
     }));
 
     Ok(result)
@@ -235,15 +198,6 @@ pub fn set_selected_output_device(app: AppHandle, device_name: String) -> Result
     };
     write_settings(&app, settings);
     Ok(())
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn get_selected_output_device(app: AppHandle) -> Result<String, String> {
-    let settings = get_settings(&app);
-    Ok(settings
-        .selected_output_device
-        .unwrap_or_else(|| "default".to_string()))
 }
 
 #[tauri::command]

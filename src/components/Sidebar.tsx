@@ -1,5 +1,4 @@
 import React from "react";
-import { useTranslation } from "react-i18next";
 import { History } from "lucide-react";
 import HandyTextLogo from "./icons/HandyTextLogo";
 import HandyHand from "./icons/HandyHand";
@@ -16,7 +15,7 @@ interface IconProps {
 }
 
 interface SectionConfig {
-  labelKey: string;
+  label: string;
   icon: React.ComponentType<IconProps>;
   component: React.ComponentType;
   enabled: (settings: any) => boolean;
@@ -24,13 +23,13 @@ interface SectionConfig {
 
 export const SECTIONS_CONFIG = {
   general: {
-    labelKey: "sidebar.general",
+    label: "General",
     icon: HandyHand,
     component: GeneralSettings,
     enabled: () => true,
   },
   history: {
-    labelKey: "sidebar.history",
+    label: "History",
     icon: History,
     component: HistorySettings,
     enabled: () => true,
@@ -46,8 +45,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeSection,
   onSectionChange,
 }) => {
-  const { t } = useTranslation();
-
   const availableSections = Object.entries(SECTIONS_CONFIG)
     .filter(([_, config]) => config.enabled())
     .map(([id, config]) => ({ id: id as SidebarSection, ...config }));
@@ -73,9 +70,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <Icon width={24} height={24} className="shrink-0" />
               <p
                 className="text-sm font-medium truncate"
-                title={t(section.labelKey)}
+                title={section.label}
               >
-                {t(section.labelKey)}
+                {section.label}
               </p>
             </div>
           );

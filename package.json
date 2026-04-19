@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "build:app:install": "bun run build && bunx tauri build --bundles app && sudo rm -rf \"/Applications/Handy.app\" && cp -R \"src-tauri/target/release/bundle/macos/Handy.app\" \"/Applications/Handy.app\"",
+    "build:app:install": "bunx tauri build --bundles app && sudo rm -rf \"/Applications/Handy.app\" && cp -R \"src-tauri/target/release/bundle/macos/Handy.app\" \"/Applications/Handy.app\"",
     "preview": "vite preview",
     "tauri": "tauri",
     "lint": "eslint src",
@@ -16,8 +16,7 @@
     "format:frontend": "prettier --write .",
     "format:backend": "cd src-tauri && cargo fmt",
     "test:playwright": "playwright test",
-    "test:playwright:ui": "playwright test --ui",
-    "check:translations": "bun scripts/check-translations.ts"
+    "test:playwright:ui": "playwright test --ui"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.16",
@@ -28,14 +27,10 @@
     "@tauri-apps/plugin-fs": "~2.4.4",
     "@tauri-apps/plugin-global-shortcut": "~2.3.1",
     "@tauri-apps/plugin-os": "~2.3.2",
-    "@tauri-apps/plugin-sql": "~2.3.1",
-    "@tauri-apps/plugin-store": "~2.4.1",
-    "i18next": "^25.7.2",
     "immer": "^11.1.3",
     "lucide-react": "^0.542.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-i18next": "^16.4.1",
     "react-select": "^5.8.0",
     "sonner": "^2.0.7",
     "tailwindcss": "^4.1.16",
@@ -54,7 +49,6 @@
     "@typescript-eslint/parser": "^8.49.0",
     "@vitejs/plugin-react": "^4.7.0",
     "eslint": "^9.39.1",
-    "eslint-plugin-i18next": "^6.1.3",
     "prettier": "^3.6.2",
     "typescript": "~5.6.3",
     "vite": "^6.4.1"

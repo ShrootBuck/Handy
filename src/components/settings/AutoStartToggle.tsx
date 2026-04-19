@@ -2,24 +2,22 @@ import React from "react";
 import { ToggleSwitch } from "../ui/ToggleSwitch";
 import { useSettings } from "../../hooks/useSettings";
 
-interface PushToTalkProps {
+interface AutoStartToggleProps {
   descriptionMode?: "inline" | "tooltip";
   grouped?: boolean;
 }
 
-export const PushToTalk: React.FC<PushToTalkProps> = React.memo(
+export const AutoStartToggle: React.FC<AutoStartToggleProps> = React.memo(
   ({ descriptionMode = "tooltip", grouped = false }) => {
     const { getSetting, updateSetting, isUpdating } = useSettings();
 
-    const pttEnabled = getSetting("push_to_talk") || false;
-
     return (
       <ToggleSwitch
-        checked={pttEnabled}
-        onChange={(enabled) => updateSetting("push_to_talk", enabled)}
-        isUpdating={isUpdating("push_to_talk")}
-        label="Push to talk"
-        description="Record only while the shortcut is held down. Turn this off to toggle recording with one press."
+        checked={getSetting("autostart_enabled") || false}
+        onChange={(enabled) => updateSetting("autostart_enabled", enabled)}
+        isUpdating={isUpdating("autostart_enabled")}
+        label="Launch at login"
+        description="Starts Handy automatically and keeps it hidden in the tray instead of opening a window."
         descriptionMode={descriptionMode}
         grouped={grouped}
       />

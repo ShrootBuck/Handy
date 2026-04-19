@@ -1,13 +1,11 @@
 import { useEffect, useState, useRef } from "react";
 import { toast, Toaster } from "sonner";
-import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import { platform } from "@tauri-apps/plugin-os";
 import {
-  checkAccessibilityPermission,
   checkMicrophonePermission,
 } from "tauri-plugin-macos-permissions-api";
-import { ModelStateEvent, RecordingErrorEvent } from "./lib/types/events";
+import { RecordingErrorEvent } from "./lib/types/events";
 import "./App.css";
 import AccessibilityPermissions from "./components/AccessibilityPermissions";
 import { AccessibilityOnboarding } from "./components/onboarding";
@@ -15,7 +13,6 @@ import { Sidebar, SidebarSection, SECTIONS_CONFIG } from "./components/Sidebar";
 import { useSettingsStore } from "./stores/settingsStore";
 import { commands } from "@/bindings";
 import { hasMacOSAccessibilityPermission } from "@/lib/macosAccessibility";
-import { getLanguageDirection, initializeRTL } from "@/lib/utils/rtl";
 
 type OnboardingStep = "accessibility" | "done";
 
@@ -26,13 +23,11 @@ const renderSettingsContent = (section: SidebarSection) => {
 };
 
 function App() {
-  const { t, i18n } = useTranslation();
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep | null>(
     null,
   );
   const [currentSection, setCurrentSection] =
     useState<SidebarSection>("general");
-  const direction = getLanguageDirection(i18n.language);
   const refreshAudioDevices = useSettingsStore(
     (state) => state.refreshAudioDevices,
   );
@@ -44,11 +39,6 @@ function App() {
   useEffect(() => {
     checkOnboardingStatus();
   }, []);
-
-  // Initialize RTL direction when language changes
-  useEffect(() => {
-    initializeRTL(i18n.language);
-  }, [i18n.language]);
 
   // Initialize Enigo, shortcuts, and refresh audio devices when main app loads
   useEffect(() => {
@@ -72,25 +62,25 @@ function App() {
 
       if (error_type === "microphone_permission_denied") {
         const currentPlatform = platform();
-        const platformKey = `errors.micPermissionDenied.${currentPlatform}`;
-        const description = t(platformKey, {
-          defaultValue: t("errors.micPermissionDenied.generic"),
-        });
-        toast.error(t("errors.micPermissionDeniedTitle"), { description });
+        const description =
+          currentPlatform === "macos"
+            ? "Grant Handy access in System Settings > Privacy & Security > Microphone and Accessibility."
+            : currentPlatform === "windows"
+              ? "Grant Handy microphone access in Windows Privacy settings."
+              : "Grant Handy microphone access in your system settings.";
+        toast.error("Microphone permission required", { description });
       } else if (error_type === "no_input_device") {
-        toast.error(t("errors.noInputDeviceTitle"), {
-          description: t("errors.noInputDevice"),
+        toast.error("No microphone found", {
+          description: "Connect or enable a microphone, then try again.",
         });
       } else {
-        toast.error(
-          t("errors.recordingFailed", { error: detail ?? "Unknown error" }),
-        );
+        toast.error(`Recording failed: ${detail ?? "Unknown error"}`);
       }
     });
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [t]);
+  }, []);
 
   // Listen for paste failures and show a toast.
   // The technical error detail is logged to handy.log on the Rust side
@@ -98,34 +88,14 @@ function App() {
   // so we show a localized, user-friendly message here instead of the raw error.
   useEffect(() => {
     const unlisten = listen("paste-error", () => {
-      toast.error(t("errors.pasteFailedTitle"), {
-        description: t("errors.pasteFailed"),
+      toast.error("Paste failed", {
+        description: "Handy could not type the transcription into the active app.",
       });
     });
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [t]);
-
-  // Listen for model loading failures and show a toast
-  useEffect(() => {
-    const unlisten = listen<ModelStateEvent>("model-state-changed", (event) => {
-      if (event.payload.event_type === "loading_failed") {
-        toast.error(
-          t("errors.modelLoadFailed", {
-            model:
-              event.payload.model_name || t("errors.modelLoadFailedUnknown"),
-          }),
-          {
-            description: event.payload.error,
-          },
-        );
-      }
-    });
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, [t]);
+  }, []);
 
   const revealMainWindowForPermissions = async () => {
     try {
@@ -194,7 +164,6 @@ function App() {
 
   return (
     <div
-      dir={direction}
       className="h-screen flex flex-col select-none cursor-default"
     >
       <Toaster

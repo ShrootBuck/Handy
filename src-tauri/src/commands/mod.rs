@@ -1,10 +1,10 @@
 pub mod audio;
 pub mod history;
-pub mod models;
 
-use crate::settings::{get_settings, write_settings, AppSettings, LogLevel};
+use crate::settings::{get_settings, write_settings, AppSettings};
 use crate::utils::cancel_current_operation;
 use tauri::{AppHandle, Manager};
+use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
@@ -42,24 +42,6 @@ pub fn get_default_settings() -> Result<AppSettings, String> {
 
 #[specta::specta]
 #[tauri::command]
-pub fn set_log_level(app: AppHandle, level: LogLevel) -> Result<(), String> {
-    let tauri_log_level: tauri_plugin_log::LogLevel = level.into();
-    let log_level: log::Level = tauri_log_level.into();
-    // Update the file log level atomic so the filter picks up the new level
-    crate::FILE_LOG_LEVEL.store(
-        log_level.to_level_filter() as u8,
-        std::sync::atomic::Ordering::Relaxed,
-    );
-
-    let mut settings = get_settings(&app);
-    settings.log_level = level;
-    write_settings(&app, settings);
-
-    Ok(())
-}
-
-#[specta::specta]
-#[tauri::command]
 pub fn open_recordings_folder(app: AppHandle) -> Result<(), String> {
     let app_data_dir = crate::portable::app_data_dir(&app)
         .map_err(|e| format!("Failed to get app data directory: {}", e))?;
@@ -74,10 +56,25 @@ pub fn open_recordings_folder(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-#[specta::specta]
 #[tauri::command]
-pub fn check_apple_intelligence_available() -> bool {
-    false
+#[specta::specta]
+pub fn change_autostart_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let mut settings = get_settings(&app);
+    settings.autostart_enabled = enabled;
+    write_settings(&app, settings);
+
+    let autostart_manager = app.autolaunch();
+    if enabled {
+        autostart_manager
+            .enable()
+            .map_err(|e| format!("Failed to enable autostart: {}", e))?;
+    } else {
+        autostart_manager
+            .disable()
+            .map_err(|e| format!("Failed to disable autostart: {}", e))?;
+    }
+
+    Ok(())
 }
 
 /// Try to initialize Enigo (keyboard/mouse simulation).

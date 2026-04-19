@@ -49,8 +49,8 @@ const DEFAULT_AUDIO_DEVICE: AudioDevice = {
 const settingUpdaters: {
   [K in keyof Settings]?: (value: Settings[K]) => Promise<unknown>;
 } = {
-  always_on_microphone: (value) =>
-    commands.updateMicrophoneMode(value as boolean),
+  autostart_enabled: (value) =>
+    commands.changeAutostartSetting(value as boolean),
   audio_feedback_volume: (value) =>
     commands.changeAudioFeedbackVolumeSetting(value as number),
   mistral_transcription_api_key: (value) =>
@@ -62,17 +62,12 @@ const settingUpdaters: {
         ? "default"
         : (value as string),
     ),
-  clamshell_microphone: (value) =>
-    commands.setClamshellMicrophone(
-      (value as string) === "Default" ? "default" : (value as string),
-    ),
   selected_output_device: (value) =>
     commands.setSelectedOutputDevice(
       (value as string) === "Default" || value === null
         ? "default"
         : (value as string),
     ),
-  log_level: (value) => commands.setLogLevel(value as any),
 };
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -107,9 +102,7 @@ export const useSettingsStore = create<SettingsStore>()(
           const settings = result.data;
           const normalizedSettings: Settings = {
             ...settings,
-            always_on_microphone: settings.always_on_microphone ?? false,
             selected_microphone: settings.selected_microphone ?? "Default",
-            clamshell_microphone: settings.clamshell_microphone ?? "Default",
             selected_output_device:
               settings.selected_output_device ?? "Default",
           };
@@ -185,7 +178,7 @@ export const useSettingsStore = create<SettingsStore>()(
         const updater = settingUpdaters[key];
         if (updater) {
           await updater(value);
-        } else if (key !== "bindings" && key !== "selected_model") {
+        } else if (key !== "bindings") {
           console.warn(`No handler for setting: ${String(key)}`);
         }
       } catch (error) {
@@ -317,11 +310,6 @@ export const useSettingsStore = create<SettingsStore>()(
         refreshSettings(),
       ]);
 
-      // Re-fetch settings when the backend changes them (e.g. language
-      // reset during model switch). The backend is the source of truth.
-      listen("model-state-changed", () => {
-        get().refreshSettings();
-      });
     },
   })),
 );

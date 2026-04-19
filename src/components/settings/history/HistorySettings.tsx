@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { Check, Copy, FolderOpen, RotateCcw, Star, Trash2 } from "lucide-react";
-import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
   commands,
@@ -60,7 +59,6 @@ const OpenRecordingsButton: React.FC<OpenRecordingsButtonProps> = ({
 );
 
 export const HistorySettings: React.FC = () => {
-  const { t } = useTranslation();
   const osType = useOsType();
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -239,13 +237,13 @@ export const HistorySettings: React.FC = () => {
   if (loading) {
     content = (
       <div className="px-4 py-3 text-center text-text/60">
-        {t("settings.history.loading")}
+        Loading history...
       </div>
     );
   } else if (entries.length === 0) {
     content = (
       <div className="px-4 py-3 text-center text-text/60">
-        {t("settings.history.empty")}
+        No recordings yet.
       </div>
     );
   } else {
@@ -276,12 +274,12 @@ export const HistorySettings: React.FC = () => {
         <div className="px-4 flex items-center justify-between">
           <div>
             <h2 className="text-xs font-medium text-mid-gray uppercase tracking-wide">
-              {t("settings.history.title")}
+              History
             </h2>
           </div>
           <OpenRecordingsButton
             onClick={openRecordingsFolder}
-            label={t("settings.history.openFolder")}
+            label="Open recordings folder"
           />
         </div>
         <div className="bg-background border border-mid-gray/20 rounded-lg overflow-visible">
@@ -309,7 +307,6 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
   deleteAudio,
   retryTranscription,
 }) => {
-  const { t, i18n } = useTranslation();
   const [showCopied, setShowCopied] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
@@ -335,7 +332,7 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
       await deleteAudio(entry.id);
     } catch (error) {
       console.error("Failed to delete entry:", error);
-      toast.error(t("settings.history.deleteError"));
+      toast.error("Failed to delete the recording.");
     }
   };
 
@@ -345,13 +342,13 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
       await retryTranscription(entry.id);
     } catch (error) {
       console.error("Failed to re-transcribe:", error);
-      toast.error(t("settings.history.retranscribeError"));
+      toast.error("Failed to transcribe that recording again.");
     } finally {
       setRetrying(false);
     }
   };
 
-  const formattedDate = formatDateTime(String(entry.timestamp), i18n.language);
+  const formattedDate = formatDateTime(String(entry.timestamp), "en-US");
 
   return (
     <div className="px-4 py-2 pb-5 flex flex-col gap-3">
@@ -361,7 +358,7 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
           <IconButton
             onClick={handleCopyText}
             disabled={!hasTranscription || retrying}
-            title={t("settings.history.copyToClipboard")}
+            title="Copy transcript"
           >
             {showCopied ? (
               <Check width={16} height={16} />
@@ -373,11 +370,7 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
             onClick={onToggleSaved}
             disabled={retrying}
             active={entry.saved}
-            title={
-              entry.saved
-                ? t("settings.history.unsave")
-                : t("settings.history.save")
-            }
+            title={entry.saved ? "Remove star" : "Star recording"}
           >
             <Star
               width={16}
@@ -388,7 +381,7 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
           <IconButton
             onClick={handleRetranscribe}
             disabled={retrying}
-            title={t("settings.history.retranscribe")}
+            title="Transcribe again"
           >
             <RotateCcw
               width={16}
@@ -403,7 +396,7 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
           <IconButton
             onClick={handleDeleteEntry}
             disabled={retrying}
-            title={t("settings.history.delete")}
+            title="Delete recording"
           >
             <Trash2 width={16} height={16} />
           </IconButton>
@@ -433,10 +426,10 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
           `}</style>
         )}
         {retrying
-          ? t("settings.history.transcribing")
+          ? "Transcribing..."
           : hasTranscription
             ? entry.transcription_text
-            : t("settings.history.transcriptionFailed")}
+            : "Transcription failed."}
       </p>
 
       <AudioPlayer onLoadRequest={handleLoadAudio} className="w-full" />

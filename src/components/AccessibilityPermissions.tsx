@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
 import { type } from "@tauri-apps/plugin-os";
 import { requestAccessibilityPermission } from "tauri-plugin-macos-permissions-api";
 import { hasMacOSAccessibilityPermission } from "@/lib/macosAccessibility";
@@ -14,7 +13,6 @@ interface ButtonConfig {
 }
 
 const AccessibilityPermissions: React.FC = () => {
-  const { t } = useTranslation();
   const [hasAccessibility, setHasAccessibility] = useState<boolean>(false);
   const [permissionState, setPermissionState] =
     useState<PermissionState>("request");
@@ -68,12 +66,12 @@ const AccessibilityPermissions: React.FC = () => {
   // Configure button text and style based on state
   const buttonConfig: Record<PermissionState, ButtonConfig | null> = {
     request: {
-      text: t("accessibility.openSettings"),
+      text: "Open Settings",
       className:
         "px-2 py-1 text-sm font-semibold bg-mid-gray/10 border  border-mid-gray/80 hover:bg-logo-primary/10 rounded cursor-pointer hover:border-logo-primary",
     },
     verify: {
-      text: t("accessibility.openSettings"),
+      text: "Check Again",
       className:
         "bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-1 px-3 rounded-md text-sm flex items-center justify-center cursor-pointer",
     },
@@ -87,7 +85,7 @@ const AccessibilityPermissions: React.FC = () => {
       <div className="flex justify-between items-center gap-2">
         <div className="">
           <p className="text-sm font-medium">
-            {t("accessibility.permissionsDescription")}
+            Handy needs Accessibility access on macOS so it can type transcriptions into other apps.
           </p>
         </div>
         <button

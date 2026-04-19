@@ -3,12 +3,10 @@ use crate::audio_toolkit::{is_microphone_access_denied, is_no_input_device_error
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::history::HistoryManager;
 use crate::managers::transcription::TranscriptionManager;
-use crate::settings::{get_settings, AppSettings, LOCKED_SELECTED_LANGUAGE};
 use crate::shortcut;
 use crate::tray::{change_tray_icon, TrayIconState};
 use crate::utils::{self, show_recording_overlay, show_transcribing_overlay};
 use crate::TranscriptionCoordinator;
-use ferrous_opencc::{config::BuiltinConfig, OpenCC};
 use log::{debug, error};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
@@ -40,69 +38,16 @@ pub trait ShortcutAction: Send + Sync {
     fn stop(&self, app: &AppHandle, binding_id: &str, shortcut_str: &str);
 }
 
-// Transcribe Action
 struct TranscribeAction {}
-
-async fn maybe_convert_chinese_variant(
-    _settings: &AppSettings,
-    transcription: &str,
-) -> Option<String> {
-    // Check if language is set to Simplified or Traditional Chinese
-    let is_simplified = LOCKED_SELECTED_LANGUAGE == "zh-Hans";
-    let is_traditional = LOCKED_SELECTED_LANGUAGE == "zh-Hant";
-
-    if !is_simplified && !is_traditional {
-        debug!("selected_language is not Simplified or Traditional Chinese; skipping translation");
-        return None;
-    }
-
-    debug!(
-        "Starting Chinese translation using OpenCC for language: {}",
-        LOCKED_SELECTED_LANGUAGE
-    );
-
-    // Use OpenCC to convert based on selected language
-    let config = if is_simplified {
-        // Convert Traditional Chinese to Simplified Chinese
-        BuiltinConfig::Tw2sp
-    } else {
-        // Convert Simplified Chinese to Traditional Chinese
-        BuiltinConfig::S2tw
-    };
-
-    match OpenCC::from_config(config) {
-        Ok(converter) => {
-            let converted = converter.convert(transcription);
-            debug!(
-                "OpenCC translation completed. Input length: {}, Output length: {}",
-                transcription.len(),
-                converted.len()
-            );
-            Some(converted)
-        }
-        Err(e) => {
-            error!("Failed to initialize OpenCC converter: {}. Falling back to original transcription.", e);
-            None
-        }
-    }
-}
 
 pub(crate) struct ProcessedTranscription {
     pub final_text: String,
 }
 
-pub(crate) async fn process_transcription_output(
-    app: &AppHandle,
-    transcription: &str,
-) -> ProcessedTranscription {
-    let settings = get_settings(app);
-    let mut final_text = transcription.to_string();
-
-    if let Some(converted_text) = maybe_convert_chinese_variant(&settings, transcription).await {
-        final_text = converted_text;
+pub(crate) async fn process_transcription_output(transcription: &str) -> ProcessedTranscription {
+    ProcessedTranscription {
+        final_text: transcription.to_string(),
     }
-
-    ProcessedTranscription { final_text }
 }
 
 impl ShortcutAction for TranscribeAction {
@@ -127,52 +72,23 @@ impl ShortcutAction for TranscribeAction {
         change_tray_icon(app, TrayIconState::Recording);
         show_recording_overlay(app);
 
-        // Get the microphone mode to determine audio feedback timing
-        let settings = get_settings(app);
-        let is_always_on = settings.always_on_microphone;
-        debug!("Microphone mode - always_on: {}", is_always_on);
-
         let mut recording_error: Option<String> = None;
-        if is_always_on {
-            // Always-on mode: Play audio feedback immediately, then apply mute after sound finishes
-            debug!("Always-on mode: Playing audio feedback immediately");
-            let rm_clone = Arc::clone(&rm);
-            let app_clone = app.clone();
-            // The blocking helper exits immediately if audio feedback is disabled,
-            // so we can always reuse this thread to ensure mute happens right after playback.
-            std::thread::spawn(move || {
-                play_feedback_sound_blocking(&app_clone, SoundType::Start);
-                rm_clone.apply_mute();
-            });
-
-            if let Err(e) = rm.try_start_recording(&binding_id) {
-                debug!("Recording failed: {}", e);
-                recording_error = Some(e);
+        debug!("Starting recording, then playing audio feedback");
+        let recording_start_time = Instant::now();
+        match rm.try_start_recording(&binding_id) {
+            Ok(()) => {
+                debug!("Recording started in {:?}", recording_start_time.elapsed());
+                let app_clone = app.clone();
+                let rm_clone = Arc::clone(&rm);
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    play_feedback_sound_blocking(&app_clone, SoundType::Start);
+                    rm_clone.apply_mute();
+                });
             }
-        } else {
-            // On-demand mode: Start recording first, then play audio feedback, then apply mute
-            // This allows the microphone to be activated before playing the sound
-            debug!("On-demand mode: Starting recording first, then audio feedback");
-            let recording_start_time = Instant::now();
-            match rm.try_start_recording(&binding_id) {
-                Ok(()) => {
-                    debug!("Recording started in {:?}", recording_start_time.elapsed());
-                    // Small delay to ensure microphone stream is active
-                    let app_clone = app.clone();
-                    let rm_clone = Arc::clone(&rm);
-                    std::thread::spawn(move || {
-                        std::thread::sleep(std::time::Duration::from_millis(100));
-                        debug!("Handling delayed audio feedback/mute sequence");
-                        // Helper handles disabled audio feedback by returning early, so we reuse it
-                        // to keep mute sequencing consistent in every mode.
-                        play_feedback_sound_blocking(&app_clone, SoundType::Start);
-                        rm_clone.apply_mute();
-                    });
-                }
-                Err(e) => {
-                    debug!("Failed to start recording: {}", e);
-                    recording_error = Some(e);
-                }
+            Err(e) => {
+                debug!("Failed to start recording: {}", e);
+                recording_error = Some(e);
             }
         }
 
@@ -297,7 +213,7 @@ impl ShortcutAction for TranscribeAction {
                                 transcription
                             );
 
-                            let processed = process_transcription_output(&ah, &transcription).await;
+                            let processed = process_transcription_output(&transcription).await;
 
                             // Save to history if WAV was saved
                             if wav_saved {
@@ -374,29 +290,6 @@ impl ShortcutAction for CancelAction {
     }
 }
 
-// Test Action
-struct TestAction;
-
-impl ShortcutAction for TestAction {
-    fn start(&self, app: &AppHandle, binding_id: &str, shortcut_str: &str) {
-        log::info!(
-            "Shortcut ID '{}': Started - {} (App: {})", // Changed "Pressed" to "Started" for consistency
-            binding_id,
-            shortcut_str,
-            app.package_info().name
-        );
-    }
-
-    fn stop(&self, app: &AppHandle, binding_id: &str, shortcut_str: &str) {
-        log::info!(
-            "Shortcut ID '{}': Stopped - {} (App: {})", // Changed "Released" to "Stopped" for consistency
-            binding_id,
-            shortcut_str,
-            app.package_info().name
-        );
-    }
-}
-
 // Static Action Map
 pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::new(|| {
     let mut map = HashMap::new();
@@ -407,10 +300,6 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
     map.insert(
         "cancel".to_string(),
         Arc::new(CancelAction) as Arc<dyn ShortcutAction>,
-    );
-    map.insert(
-        "test".to_string(),
-        Arc::new(TestAction) as Arc<dyn ShortcutAction>,
     );
     map
 });

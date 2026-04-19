@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useRef } from "react";
-import { useTranslation } from "react-i18next";
 import {
   getKeyName,
   formatKeyCombination,
@@ -25,7 +24,6 @@ export const GlobalShortcutInput: React.FC<GlobalShortcutInputProps> = ({
   shortcutId,
   disabled = false,
 }) => {
-  const { t } = useTranslation();
   const { getSetting, updateBinding, resetBinding, isUpdating, isLoading } =
     useSettings();
   const [keyPressed, setKeyPressed] = useState<string[]>([]);
@@ -107,11 +105,7 @@ export const GlobalShortcutInput: React.FC<GlobalShortcutInputProps> = ({
             await updateBinding(editingShortcutId, newShortcut);
           } catch (error) {
             console.error("Failed to change binding:", error);
-            toast.error(
-              t("settings.general.shortcut.errors.set", {
-                error: String(error),
-              }),
-            );
+            toast.error(`Failed to set shortcut: ${String(error)}`);
 
             // Reset to original binding on error
             if (originalBinding) {
@@ -119,7 +113,7 @@ export const GlobalShortcutInput: React.FC<GlobalShortcutInputProps> = ({
                 await updateBinding(editingShortcutId, originalBinding);
               } catch (resetError) {
                 console.error("Failed to reset binding:", resetError);
-                toast.error(t("settings.general.shortcut.errors.reset"));
+                toast.error("Failed to restore the previous shortcut.");
               }
             }
           }
@@ -144,7 +138,7 @@ export const GlobalShortcutInput: React.FC<GlobalShortcutInputProps> = ({
             await updateBinding(editingShortcutId, originalBinding);
           } catch (error) {
             console.error("Failed to restore original binding:", error);
-            toast.error(t("settings.general.shortcut.errors.restore"));
+            toast.error("Failed to restore the previous shortcut.");
           }
         } else if (editingShortcutId) {
           commands.resumeBinding(editingShortcutId).catch(console.error);
@@ -192,8 +186,7 @@ export const GlobalShortcutInput: React.FC<GlobalShortcutInputProps> = ({
 
   // Format the current shortcut keys being recorded
   const formatCurrentKeys = (): string => {
-    if (recordedKeys.length === 0)
-      return t("settings.general.shortcut.pressKeys");
+    if (recordedKeys.length === 0) return "Press shortcut keys...";
 
     // Use the same formatting as the display to ensure consistency
     return formatKeyCombination(recordedKeys.join("+"), osType);
@@ -208,14 +201,12 @@ export const GlobalShortcutInput: React.FC<GlobalShortcutInputProps> = ({
   if (isLoading) {
     return (
       <SettingContainer
-        title={t("settings.general.shortcut.title")}
-        description={t("settings.general.shortcut.description")}
+        title="Shortcut"
+        description="Set the global shortcut used by Handy."
         descriptionMode={descriptionMode}
         grouped={grouped}
       >
-        <div className="text-sm text-mid-gray">
-          {t("settings.general.shortcut.loading")}
-        </div>
+        <div className="text-sm text-mid-gray">Loading shortcuts...</div>
       </SettingContainer>
     );
   }
@@ -224,14 +215,12 @@ export const GlobalShortcutInput: React.FC<GlobalShortcutInputProps> = ({
   if (Object.keys(bindings).length === 0) {
     return (
       <SettingContainer
-        title={t("settings.general.shortcut.title")}
-        description={t("settings.general.shortcut.description")}
+        title="Shortcut"
+        description="Set the global shortcut used by Handy."
         descriptionMode={descriptionMode}
         grouped={grouped}
       >
-        <div className="text-sm text-mid-gray">
-          {t("settings.general.shortcut.none")}
-        </div>
+        <div className="text-sm text-mid-gray">No shortcuts available.</div>
       </SettingContainer>
     );
   }
@@ -240,32 +229,20 @@ export const GlobalShortcutInput: React.FC<GlobalShortcutInputProps> = ({
   if (!binding) {
     return (
       <SettingContainer
-        title={t("settings.general.shortcut.title")}
-        description={t("settings.general.shortcut.notFound")}
+        title="Shortcut"
+        description="That shortcut could not be found."
         descriptionMode={descriptionMode}
         grouped={grouped}
       >
-        <div className="text-sm text-mid-gray">
-          {t("settings.general.shortcut.none")}
-        </div>
+        <div className="text-sm text-mid-gray">No shortcuts available.</div>
       </SettingContainer>
     );
   }
 
-  // Get translated name and description for the binding
-  const translatedName = t(
-    `settings.general.shortcut.bindings.${shortcutId}.name`,
-    binding.name,
-  );
-  const translatedDescription = t(
-    `settings.general.shortcut.bindings.${shortcutId}.description`,
-    binding.description,
-  );
-
   return (
     <SettingContainer
-      title={translatedName}
-      description={translatedDescription}
+      title={binding.name}
+      description={binding.description}
       descriptionMode={descriptionMode}
       grouped={grouped}
       disabled={disabled}

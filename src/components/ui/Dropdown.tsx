@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 
 export interface DropdownOption {
   value: string;
@@ -26,7 +25,6 @@ export const Dropdown: React.FC<DropdownProps> = ({
   disabled = false,
   onRefresh,
 }) => {
-  const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -89,7 +87,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
         <div className="absolute top-full left-0 right-0 mt-1 bg-background border border-mid-gray/80 rounded-md shadow-lg z-50 max-h-60 overflow-y-auto">
           {options.length === 0 ? (
             <div className="px-2 py-1 text-sm text-mid-gray">
-              {t("common.noOptionsFound")}
+              No options found.
             </div>
           ) : (
             options.map((option) => (

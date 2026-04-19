@@ -1,19 +1,17 @@
 import React from "react";
-import { useTranslation } from "react-i18next";
 import { SettingContainer } from "../ui/SettingContainer";
 import { Input } from "../ui/Input";
 import { useSettings } from "../../hooks/useSettings";
 
 export const MistralTranscriptionSettings: React.FC = () => {
-  const { t } = useTranslation();
   const { getSetting, updateSetting, isUpdating } = useSettings();
 
   const apiKey = getSetting("mistral_transcription_api_key") || "";
 
   return (
     <SettingContainer
-      title={t("settings.modelSettings.mistral.apiKey.title")}
-      description={t("settings.modelSettings.mistral.apiKey.description")}
+      title="Mistral API key"
+      description="Handy sends recordings to Mistral's transcription API using your key."
       descriptionMode="inline"
       grouped={true}
       layout="stacked"
@@ -29,6 +27,7 @@ export const MistralTranscriptionSettings: React.FC = () => {
         }
         disabled={isUpdating("mistral_transcription_api_key")}
         className="w-full"
+        placeholder="Paste your Mistral API key"
       />
     </SettingContainer>
   );
