@@ -115,7 +115,6 @@ tauri-utils = { git = "https://github.com/cjpais/tauri.git", branch = "handy-2.1
 tempfile = "3"
 
 [profile.release]
-lto = true
-codegen-units = 1
+lto = "thin"
 strip = true
 panic = "unwind"
