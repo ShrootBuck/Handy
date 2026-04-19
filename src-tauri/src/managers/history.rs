@@ -17,9 +17,8 @@ use tauri_specta::Event;
 /// Note: For users upgrading from tauri-plugin-sql, migrate_from_tauri_plugin_sql()
 /// converts the old _sqlx_migrations table tracking to the user_version pragma,
 /// ensuring migrations don't re-run on existing databases.
-static MIGRATIONS: &[M] = &[
-    M::up(
-        "CREATE TABLE IF NOT EXISTS transcription_history (
+static MIGRATIONS: &[M] = &[M::up(
+    "CREATE TABLE IF NOT EXISTS transcription_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             file_name TEXT NOT NULL,
             timestamp INTEGER NOT NULL,
@@ -27,8 +26,7 @@ static MIGRATIONS: &[M] = &[
             title TEXT NOT NULL,
             transcription_text TEXT NOT NULL
         );",
-    ),
-];
+)];
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type)]
 pub struct PaginatedHistory {
@@ -114,7 +112,10 @@ impl HistoryManager {
         // Apply any pending migrations
         if let Err(e) = migrations.to_latest(&mut conn) {
             if e.to_string().contains("too high") || e.to_string().contains("TooFarAhead") {
-                log::warn!("Database version is higher than migrations. Ignoring: {}", e);
+                log::warn!(
+                    "Database version is higher than migrations. Ignoring: {}",
+                    e
+                );
             } else {
                 return Err(e.into());
             }
@@ -230,13 +231,7 @@ impl HistoryManager {
                 title,
                 transcription_text
             ) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![
-                &file_name,
-                timestamp,
-                false,
-                &title,
-                &transcription_text,
-            ],
+            params![&file_name, timestamp, false, &title, &transcription_text,],
         )?;
 
         let entry = HistoryEntry {
@@ -275,23 +270,19 @@ impl HistoryManager {
             "UPDATE transcription_history
              SET transcription_text = ?1
              WHERE id = ?2",
-            params![
-                transcription_text,
-                id
-            ],
+            params![transcription_text, id],
         )?;
 
         if updated == 0 {
             return Err(anyhow!("History entry {} not found", id));
         }
 
-        let entry = conn
-            .query_row(
-                "SELECT id, file_name, timestamp, saved, title, transcription_text
+        let entry = conn.query_row(
+            "SELECT id, file_name, timestamp, saved, title, transcription_text
                  FROM transcription_history WHERE id = ?1",
-                params![id],
-                Self::map_history_entry,
-            )?;
+            params![id],
+            Self::map_history_entry,
+        )?;
 
         debug!("Updated transcription for history entry {}", id);
 

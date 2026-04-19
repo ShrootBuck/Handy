@@ -821,10 +821,7 @@ impl TranscriptionManager {
         );
 
         let et = std::time::Instant::now();
-        info!(
-            "Transcription completed in {}ms",
-            (et - st).as_millis()
-        );
+        info!("Transcription completed in {}ms", (et - st).as_millis());
 
         let final_result = filtered_result;
 

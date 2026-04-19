@@ -93,10 +93,7 @@ pub async fn retry_history_entry_transcription(
     }
 
     history_manager
-        .update_transcription(
-            id,
-            transcription,
-        )
+        .update_transcription(id, transcription)
         .map(|_| ())
         .map_err(|e| e.to_string())
 }

@@ -484,7 +484,6 @@ fn default_typing_tool() -> TypingTool {
     TypingTool::Auto
 }
 
-
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
 pub fn get_default_settings() -> AppSettings {
@@ -668,7 +667,10 @@ pub fn get_settings(app: &AppHandle) -> AppSettings {
 
         let (sanitized_settings, changed) = sanitize_settings(settings);
         if changed {
-            store.set("settings", serde_json::to_value(&sanitized_settings).unwrap());
+            store.set(
+                "settings",
+                serde_json::to_value(&sanitized_settings).unwrap(),
+            );
         }
         sanitized_settings
     } else {

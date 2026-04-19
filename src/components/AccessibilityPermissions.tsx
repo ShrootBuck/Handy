@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { type } from "@tauri-apps/plugin-os";
-import {
-  requestAccessibilityPermission,
-} from "tauri-plugin-macos-permissions-api";
+import { requestAccessibilityPermission } from "tauri-plugin-macos-permissions-api";
 import { hasMacOSAccessibilityPermission } from "@/lib/macosAccessibility";
 
 // Define permission state type

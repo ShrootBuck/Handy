@@ -24,12 +24,9 @@ struct ChatCompletionResponse {
 }
 
 fn transcription_instruction(language: Option<&str>) -> String {
-    let base = "You are a speech-to-text transcription model. Transcribe the provided audio VERBATIM into plain text. Output ONLY the words that were spoken — no preamble, no commentary, no quotation marks, no descriptions of sounds, no language labels, no summaries. If the audio is silent or empty, output an empty string.";
+    let base = "You are a speech-to-text transcription assistant. Transcribe the provided audio into plain text. Output ONLY the words that were spoken, with no preamble, no commentary, no quotation marks, no descriptions of sounds, no language labels, no summaries. If the audio is silent or empty, output an empty string. Feel free to polish/touch-up minor errors, like adjusting punctuation or removing 'uhh's.";
     match language.filter(|value| !value.trim().is_empty()) {
-        Some(lang) => format!(
-            "{} The speaker is speaking in {}. Transcribe exactly what is said, nothing more.",
-            base, lang
-        ),
+        Some(lang) => format!("{} The speaker is speaking in {}.", base, lang),
         None => base.to_string(),
     }
 }
@@ -52,7 +49,10 @@ pub fn transcribe_with_mistral_blocking(
     }
 
     let url = format!("{}/chat/completions", base_url);
-    debug!("Sending Mistral chat completions (audio) request to: {}", url);
+    debug!(
+        "Sending Mistral chat completions (audio) request to: {}",
+        url
+    );
 
     let mut headers = HeaderMap::new();
     headers.insert(

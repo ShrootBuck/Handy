@@ -19,8 +19,8 @@ use specta::Type;
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::settings::{
-    self, get_settings, AutoSubmitKey, ClipboardHandling, KeyboardImplementation,
-    PasteMethod, ShortcutBinding, SoundTheme, TypingTool,
+    self, get_settings, AutoSubmitKey, ClipboardHandling, KeyboardImplementation, PasteMethod,
+    ShortcutBinding, SoundTheme, TypingTool,
 };
 
 // Note: Commands are accessed via shortcut::handy_keys:: in lib.rs

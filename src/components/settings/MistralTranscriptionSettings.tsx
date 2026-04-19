@@ -22,7 +22,10 @@ export const MistralTranscriptionSettings: React.FC = () => {
         type="password"
         value={apiKey}
         onChange={(event) =>
-          void updateSetting("mistral_transcription_api_key", event.target.value)
+          void updateSetting(
+            "mistral_transcription_api_key",
+            event.target.value,
+          )
         }
         disabled={isUpdating("mistral_transcription_api_key")}
         className="w-full"

@@ -6,9 +6,7 @@ use crate::managers::transcription::TranscriptionManager;
 use crate::settings::{get_settings, AppSettings};
 use crate::shortcut;
 use crate::tray::{change_tray_icon, TrayIconState};
-use crate::utils::{
-    self, show_recording_overlay, show_transcribing_overlay,
-};
+use crate::utils::{self, show_recording_overlay, show_transcribing_overlay};
 use crate::TranscriptionCoordinator;
 use ferrous_opencc::{config::BuiltinConfig, OpenCC};
 use log::{debug, error};
@@ -307,16 +305,11 @@ impl ShortcutAction for TranscribeAction {
                                 transcription
                             );
 
-                            let processed =
-                                process_transcription_output(&ah, &transcription)
-                                    .await;
+                            let processed = process_transcription_output(&ah, &transcription).await;
 
                             // Save to history if WAV was saved
                             if wav_saved {
-                                if let Err(err) = hm.save_entry(
-                                    file_name,
-                                    transcription,
-                                ) {
+                                if let Err(err) = hm.save_entry(file_name, transcription) {
                                     error!("Failed to save history entry: {}", err);
                                 }
                             }
@@ -353,10 +346,7 @@ impl ShortcutAction for TranscribeAction {
                             debug!("Global Shortcut Transcription error: {}", err);
                             // Save entry with empty text so user can retry
                             if wav_saved {
-                                if let Err(save_err) = hm.save_entry(
-                                    file_name,
-                                    String::new(),
-                                ) {
+                                if let Err(save_err) = hm.save_entry(file_name, String::new()) {
                                     error!("Failed to save failed history entry: {}", save_err);
                                 }
                             }
