@@ -1,15 +1,9 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Cog, FlaskConical, History } from "lucide-react";
+import { History } from "lucide-react";
 import HandyTextLogo from "./icons/HandyTextLogo";
 import HandyHand from "./icons/HandyHand";
-import { useSettings } from "../hooks/useSettings";
-import {
-  GeneralSettings,
-  AdvancedSettings,
-  HistorySettings,
-  DebugSettings,
-} from "./settings";
+import { GeneralSettings, HistorySettings } from "./settings";
 
 export type SidebarSection = keyof typeof SECTIONS_CONFIG;
 
@@ -35,23 +29,11 @@ export const SECTIONS_CONFIG = {
     component: GeneralSettings,
     enabled: () => true,
   },
-  advanced: {
-    labelKey: "sidebar.advanced",
-    icon: Cog,
-    component: AdvancedSettings,
-    enabled: () => true,
-  },
   history: {
     labelKey: "sidebar.history",
     icon: History,
     component: HistorySettings,
     enabled: () => true,
-  },
-  debug: {
-    labelKey: "sidebar.debug",
-    icon: FlaskConical,
-    component: DebugSettings,
-    enabled: (settings) => settings?.debug_mode ?? false,
   },
 } as const satisfies Record<string, SectionConfig>;
 
@@ -65,10 +47,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSectionChange,
 }) => {
   const { t } = useTranslation();
-  const { settings } = useSettings();
 
   const availableSections = Object.entries(SECTIONS_CONFIG)
-    .filter(([_, config]) => config.enabled(settings))
+    .filter(([_, config]) => config.enabled())
     .map(([id, config]) => ({ id: id as SidebarSection, ...config }));
 
   return (

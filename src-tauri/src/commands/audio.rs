@@ -1,8 +1,6 @@
-use crate::audio_feedback;
 use crate::audio_toolkit::audio::{list_input_devices, list_output_devices};
 use crate::managers::audio::{AudioRecordingManager, MicrophoneMode};
 use crate::settings::{get_settings, write_settings};
-use log::warn;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::sync::Arc;
@@ -13,26 +11,6 @@ use winreg::{
     enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE},
     RegKey, HKEY,
 };
-
-#[derive(Serialize, Type)]
-pub struct CustomSounds {
-    start: bool,
-    stop: bool,
-}
-
-fn custom_sound_exists(app: &AppHandle, sound_type: &str) -> bool {
-    crate::portable::resolve_app_data(app, &format!("custom_{}.wav", sound_type))
-        .map_or(false, |path| path.exists())
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn check_custom_sounds(app: AppHandle) -> CustomSounds {
-    CustomSounds {
-        start: custom_sound_exists(&app, "start"),
-        stop: custom_sound_exists(&app, "stop"),
-    }
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone, Type)]
 pub struct AudioDevice {
@@ -265,42 +243,6 @@ pub fn get_selected_output_device(app: AppHandle) -> Result<String, String> {
     let settings = get_settings(&app);
     Ok(settings
         .selected_output_device
-        .unwrap_or_else(|| "default".to_string()))
-}
-
-#[tauri::command]
-#[specta::specta]
-pub async fn play_test_sound(app: AppHandle, sound_type: String) {
-    let sound = match sound_type.as_str() {
-        "start" => audio_feedback::SoundType::Start,
-        "stop" => audio_feedback::SoundType::Stop,
-        _ => {
-            warn!("Unknown sound type: {}", sound_type);
-            return;
-        }
-    };
-    audio_feedback::play_test_sound(&app, sound);
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn set_clamshell_microphone(app: AppHandle, device_name: String) -> Result<(), String> {
-    let mut settings = get_settings(&app);
-    settings.clamshell_microphone = if device_name == "default" {
-        None
-    } else {
-        Some(device_name)
-    };
-    write_settings(&app, settings);
-    Ok(())
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn get_clamshell_microphone(app: AppHandle) -> Result<String, String> {
-    let settings = get_settings(&app);
-    Ok(settings
-        .clamshell_microphone
         .unwrap_or_else(|| "default".to_string()))
 }
 

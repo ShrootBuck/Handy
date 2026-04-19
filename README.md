@@ -40,12 +40,12 @@ This fork adds support for Mistral's Voxtral models via the Mistral API. This pr
 ### Setup
 
 1. Obtain a Mistral API key from [mistral.ai](https://mistral.ai)
-2. In Handy settings, select "Voxtral Small (Mistral API)" as your model
+2. In Handy settings, select "Voxtral Mini (Mistral API)" as your model
 3. Enter your API key in the Mistral settings section
 
 ### Features
 
-- **Voxtral Small** - Fast, accurate transcription using Mistral's chat completions endpoint
+- **Voxtral Mini** - Fast, accurate transcription using Mistral's speech-to-text endpoint
 - **Automatic language detection** - Works with any language
 - **Retry logic** - Handles rate limits gracefully with exponential backoff
 - **No hardcoded keys** - Uses your own API key, never a shared default

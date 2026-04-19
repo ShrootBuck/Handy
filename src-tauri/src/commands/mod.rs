@@ -1,7 +1,6 @@
 pub mod audio;
 pub mod history;
 pub mod models;
-pub mod transcription;
 
 use crate::settings::{get_settings, write_settings, AppSettings, LogLevel};
 use crate::utils::cancel_current_operation;
@@ -75,19 +74,10 @@ pub fn open_recordings_folder(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Check if Apple Intelligence is available on this device.
-/// Called by the frontend when the user selects Apple Intelligence provider.
 #[specta::specta]
 #[tauri::command]
 pub fn check_apple_intelligence_available() -> bool {
-    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-    {
-        crate::apple_intelligence::check_apple_intelligence_availability()
-    }
-    #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
-    {
-        false
-    }
+    false
 }
 
 /// Try to initialize Enigo (keyboard/mouse simulation).

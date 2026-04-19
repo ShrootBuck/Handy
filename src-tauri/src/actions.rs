@@ -3,7 +3,7 @@ use crate::audio_toolkit::{is_microphone_access_denied, is_no_input_device_error
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::history::HistoryManager;
 use crate::managers::transcription::TranscriptionManager;
-use crate::settings::{get_settings, AppSettings};
+use crate::settings::{get_settings, AppSettings, LOCKED_SELECTED_LANGUAGE};
 use crate::shortcut;
 use crate::tray::{change_tray_icon, TrayIconState};
 use crate::utils::{self, show_recording_overlay, show_transcribing_overlay};
@@ -43,21 +43,13 @@ pub trait ShortcutAction: Send + Sync {
 // Transcribe Action
 struct TranscribeAction {}
 
-/// Field name for structured output JSON schema
-const TRANSCRIPTION_FIELD: &str = "transcription";
-
-/// Strip invisible Unicode characters that some LLMs may insert
-fn strip_invisible_chars(s: &str) -> String {
-    s.replace(['\u{200B}', '\u{200C}', '\u{200D}', '\u{FEFF}'], "")
-}
-
 async fn maybe_convert_chinese_variant(
-    settings: &AppSettings,
+    _settings: &AppSettings,
     transcription: &str,
 ) -> Option<String> {
     // Check if language is set to Simplified or Traditional Chinese
-    let is_simplified = settings.selected_language == "zh-Hans";
-    let is_traditional = settings.selected_language == "zh-Hant";
+    let is_simplified = LOCKED_SELECTED_LANGUAGE == "zh-Hans";
+    let is_traditional = LOCKED_SELECTED_LANGUAGE == "zh-Hant";
 
     if !is_simplified && !is_traditional {
         debug!("selected_language is not Simplified or Traditional Chinese; skipping translation");
@@ -66,7 +58,7 @@ async fn maybe_convert_chinese_variant(
 
     debug!(
         "Starting Chinese translation using OpenCC for language: {}",
-        settings.selected_language
+        LOCKED_SELECTED_LANGUAGE
     );
 
     // Use OpenCC to convert based on selected language

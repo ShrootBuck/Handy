@@ -1,8 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import type { ModelInfo } from "@/bindings";
-import type { ModelCardStatus } from "./ModelCard";
 import ModelCard from "./ModelCard";
 import HandyTextLogo from "../icons/HandyTextLogo";
 import { useModelStore } from "../../stores/modelStore";
@@ -13,94 +11,15 @@ interface OnboardingProps {
 
 const Onboarding: React.FC<OnboardingProps> = ({ onModelSelected }) => {
   const { t } = useTranslation();
-  const {
-    models,
-    downloadModel,
-    selectModel,
-    downloadingModels,
-    verifyingModels,
-    extractingModels,
-    downloadProgress,
-    downloadStats,
-  } = useModelStore();
-  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
-
-  const isDownloading = selectedModelId !== null;
-
-  // Watch for the selected model to finish downloading + verifying + extracting
-  useEffect(() => {
-    if (!selectedModelId) return;
-
-    const model = models.find((m) => m.id === selectedModelId);
-    const stillDownloading = selectedModelId in downloadingModels;
-    const stillVerifying = selectedModelId in verifyingModels;
-    const stillExtracting = selectedModelId in extractingModels;
-
-    if (
-      model &&
-      (model.is_downloaded || model.is_remote) &&
-      !stillDownloading &&
-      !stillVerifying &&
-      !stillExtracting
-    ) {
-      // Model is ready — select it and transition
-      selectModel(selectedModelId).then((success) => {
-        if (success) {
-          onModelSelected();
-        } else {
-          toast.error(t("onboarding.errors.selectModel"));
-          setSelectedModelId(null);
-        }
-      });
-    }
-  }, [
-    selectedModelId,
-    models,
-    downloadingModels,
-    verifyingModels,
-    extractingModels,
-    selectModel,
-    onModelSelected,
-  ]);
+  const { models, selectModel } = useModelStore();
 
   const handleModelAction = async (modelId: string) => {
-    setSelectedModelId(modelId);
-
-    const model = models.find((candidate) => candidate.id === modelId);
-    if (model?.is_remote) {
-      const success = await selectModel(modelId);
-      if (success) {
-        onModelSelected();
-      } else {
-        toast.error(t("onboarding.errors.selectModel"));
-        setSelectedModelId(null);
-      }
-      return;
+    const success = await selectModel(modelId);
+    if (success) {
+      onModelSelected();
+    } else {
+      toast.error(t("onboarding.errors.selectModel"));
     }
-
-    // Error toast is handled centrally by the model-download-failed event listener
-    // in modelStore — no toast here to avoid duplicates.
-    const success = await downloadModel(modelId);
-    if (!success) {
-      setSelectedModelId(null);
-    }
-  };
-
-  const getModelStatus = (modelId: string): ModelCardStatus => {
-    const model = models.find((candidate) => candidate.id === modelId);
-    if (modelId in extractingModels) return "extracting";
-    if (modelId in verifyingModels) return "verifying";
-    if (modelId in downloadingModels) return "downloading";
-    if (model?.is_remote) return "available";
-    return "downloadable";
-  };
-
-  const getModelDownloadProgress = (modelId: string): number | undefined => {
-    return downloadProgress[modelId]?.percentage;
-  };
-
-  const getModelDownloadSpeed = (modelId: string): number | undefined => {
-    return downloadStats[modelId]?.speed;
   };
 
   return (
@@ -114,42 +33,15 @@ const Onboarding: React.FC<OnboardingProps> = ({ onModelSelected }) => {
 
       <div className="max-w-[600px] w-full mx-auto text-center flex-1 flex flex-col min-h-0">
         <div className="flex flex-col gap-4 pb-6">
-          {models
-            .filter((m: ModelInfo) => !m.is_downloaded)
-            .filter((model: ModelInfo) => model.is_recommended)
-            .map((model: ModelInfo) => (
-              <ModelCard
-                key={model.id}
-                model={model}
-                variant="featured"
-                status={getModelStatus(model.id)}
-                disabled={isDownloading}
-                onSelect={handleModelAction}
-                onDownload={handleModelAction}
-                downloadProgress={getModelDownloadProgress(model.id)}
-                downloadSpeed={getModelDownloadSpeed(model.id)}
-              />
-            ))}
-
-          {models
-            .filter((m: ModelInfo) => !m.is_downloaded)
-            .filter((model: ModelInfo) => !model.is_recommended)
-            .sort(
-              (a: ModelInfo, b: ModelInfo) =>
-                Number(a.size_mb) - Number(b.size_mb),
-            )
-            .map((model: ModelInfo) => (
-              <ModelCard
-                key={model.id}
-                model={model}
-                status={getModelStatus(model.id)}
-                disabled={isDownloading}
-                onSelect={handleModelAction}
-                onDownload={handleModelAction}
-                downloadProgress={getModelDownloadProgress(model.id)}
-                downloadSpeed={getModelDownloadSpeed(model.id)}
-              />
-            ))}
+          {models.map((model) => (
+            <ModelCard
+              key={model.id}
+              model={model}
+              variant={model.is_recommended ? "featured" : "default"}
+              status="available"
+              onSelect={handleModelAction}
+            />
+          ))}
         </div>
       </div>
     </div>

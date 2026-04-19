@@ -3,15 +3,6 @@
 //! Everything is auto-generated at compile time by build.rs from the
 //! frontend locale files (src/i18n/locales/*/translation.json).
 //!
-//! The English translation.json is the single source of truth:
-//! - TrayStrings struct fields are derived from the English "tray" keys
-//! - All languages are auto-discovered from the locales directory
-//!
-//! To add a new tray menu item:
-//! 1. Add the key to en/translation.json under "tray"
-//! 2. Add translations to other locale files
-//! 3. Update tray.rs to use the new field (e.g., strings.new_field)
-
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 

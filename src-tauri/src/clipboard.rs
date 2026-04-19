@@ -1,9 +1,8 @@
 use crate::input::{self, EnigoState};
-#[cfg(target_os = "linux")]
-use crate::settings::TypingTool;
-use crate::settings::{get_settings, AutoSubmitKey, ClipboardHandling, PasteMethod};
+use crate::settings::{get_settings, AutoSubmitKey, PasteMethod, LOCKED_APPEND_TRAILING_SPACE, LOCKED_AUTO_SUBMIT, LOCKED_CLIPBOARD_HANDLING, LOCKED_PASTE_METHOD};
 use enigo::{Direction, Enigo, Key, Keyboard};
 use log::info;
+#[cfg(target_os = "linux")]
 use std::process::Command;
 use std::time::Duration;
 use tauri::{AppHandle, Manager};
@@ -120,52 +119,13 @@ fn try_send_key_combo_linux(paste_method: &PasteMethod) -> Result<bool, String> 
 /// Attempts to type text directly using Linux-native tools.
 /// Returns `Ok(true)` if a native tool handled it, `Ok(false)` to fall back to enigo.
 #[cfg(target_os = "linux")]
-fn try_direct_typing_linux(text: &str, preferred_tool: TypingTool) -> Result<bool, String> {
-    // If user specified a tool, try only that one
-    if preferred_tool != TypingTool::Auto {
-        return match preferred_tool {
-            TypingTool::Wtype if is_wtype_available() => {
-                info!("Using user-specified wtype");
-                type_text_via_wtype(text)?;
-                Ok(true)
-            }
-            TypingTool::Kwtype if is_kwtype_available() => {
-                info!("Using user-specified kwtype");
-                type_text_via_kwtype(text)?;
-                Ok(true)
-            }
-            TypingTool::Dotool if is_dotool_available() => {
-                info!("Using user-specified dotool");
-                type_text_via_dotool(text)?;
-                Ok(true)
-            }
-            TypingTool::Ydotool if is_ydotool_available() => {
-                info!("Using user-specified ydotool");
-                type_text_via_ydotool(text)?;
-                Ok(true)
-            }
-            TypingTool::Xdotool if is_xdotool_available() => {
-                info!("Using user-specified xdotool");
-                type_text_via_xdotool(text)?;
-                Ok(true)
-            }
-            _ => Err(format!(
-                "Typing tool {:?} is not available on this system",
-                preferred_tool
-            )),
-        };
-    }
-
-    // Auto mode - existing fallback chain
+fn try_direct_typing_linux(text: &str) -> Result<bool, String> {
     if is_wayland() {
-        // KDE Wayland: prefer kwtype (uses KDE Fake Input protocol, supports umlauts)
         if is_kde_wayland() && is_kwtype_available() {
             info!("Using kwtype for direct text input on KDE Wayland");
             type_text_via_kwtype(text)?;
             return Ok(true);
         }
-        // Wayland: prefer wtype, then dotool, then ydotool
-        // Note: wtype doesn't work on KDE (no zwp_virtual_keyboard_manager_v1 support)
         if !is_kde_wayland() && is_wtype_available() {
             info!("Using wtype for direct text input");
             type_text_via_wtype(text)?;
@@ -196,29 +156,6 @@ fn try_direct_typing_linux(text: &str, preferred_tool: TypingTool) -> Result<boo
     }
 
     Ok(false)
-}
-
-/// Returns the list of available typing tools on this system.
-/// Always includes "auto" as the first entry.
-#[cfg(target_os = "linux")]
-pub fn get_available_typing_tools() -> Vec<String> {
-    let mut tools = vec!["auto".to_string()];
-    if is_wtype_available() {
-        tools.push("wtype".to_string());
-    }
-    if is_kwtype_available() {
-        tools.push("kwtype".to_string());
-    }
-    if is_dotool_available() {
-        tools.push("dotool".to_string());
-    }
-    if is_ydotool_available() {
-        tools.push("ydotool".to_string());
-    }
-    if is_xdotool_available() {
-        tools.push("xdotool".to_string());
-    }
-    tools
 }
 
 /// Check if wtype is available (Wayland text input tool)
@@ -499,31 +436,6 @@ fn send_key_combo_via_xdotool(paste_method: &PasteMethod) -> Result<(), String> 
     Ok(())
 }
 
-/// Pastes text by invoking an external script.
-/// The script receives the text to paste as a single argument.
-fn paste_via_external_script(text: &str, script_path: &str) -> Result<(), String> {
-    info!("Pasting via external script: {}", script_path);
-
-    let output = Command::new(script_path)
-        .arg(text)
-        .output()
-        .map_err(|e| format!("Failed to execute external script '{}': {}", script_path, e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        return Err(format!(
-            "External script '{}' failed with exit code {:?}. stderr: {}, stdout: {}",
-            script_path,
-            output.status.code(),
-            stderr.trim(),
-            stdout.trim()
-        ));
-    }
-
-    Ok(())
-}
-
 /// Types text directly by simulating individual key presses.
 fn paste_direct(
     enigo: &mut Enigo,
@@ -590,11 +502,11 @@ fn should_send_auto_submit(auto_submit: bool, paste_method: PasteMethod) -> bool
 
 pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
     let settings = get_settings(&app_handle);
-    let paste_method = settings.paste_method;
-    let paste_delay_ms = settings.paste_delay_ms;
+    let _ = settings;
+    let paste_method = LOCKED_PASTE_METHOD;
+    let paste_delay_ms = 0;
 
-    // Append trailing space if setting is enabled
-    let text = if settings.append_trailing_space {
+    let text = if LOCKED_APPEND_TRAILING_SPACE {
         format!("{} ", text)
     } else {
         text
@@ -619,14 +531,7 @@ pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
         PasteMethod::None => {
             info!("PasteMethod::None selected - skipping paste action");
         }
-        PasteMethod::Direct => {
-            paste_direct(
-                &mut enigo,
-                &text,
-                #[cfg(target_os = "linux")]
-                settings.typing_tool,
-            )?;
-        }
+        PasteMethod::Direct => paste_direct(&mut enigo, &text)? ,
         PasteMethod::CtrlV | PasteMethod::CtrlShiftV | PasteMethod::ShiftInsert => {
             paste_via_clipboard(
                 &mut enigo,
@@ -636,23 +541,15 @@ pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
                 paste_delay_ms,
             )?
         }
-        PasteMethod::ExternalScript => {
-            let script_path = settings
-                .external_script_path
-                .as_ref()
-                .filter(|p| !p.is_empty())
-                .ok_or("External script path is not configured")?;
-            paste_via_external_script(&text, script_path)?;
-        }
+        PasteMethod::ExternalScript => unreachable!("external script paste is disabled"),
     }
 
-    if should_send_auto_submit(settings.auto_submit, paste_method) {
+    if should_send_auto_submit(LOCKED_AUTO_SUBMIT, paste_method) {
         std::thread::sleep(Duration::from_millis(50));
-        send_return_key(&mut enigo, settings.auto_submit_key)?;
+        send_return_key(&mut enigo, crate::settings::AutoSubmitKey::Enter)?;
     }
 
-    // After pasting, optionally copy to clipboard based on settings
-    if settings.clipboard_handling == ClipboardHandling::CopyToClipboard {
+    if LOCKED_CLIPBOARD_HANDLING == crate::settings::ClipboardHandling::CopyToClipboard {
         let clipboard = app_handle.clipboard();
         clipboard
             .write_text(&text)

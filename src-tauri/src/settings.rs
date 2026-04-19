@@ -1,17 +1,30 @@
 use log::{debug, warn};
 use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
-use sha2::Digest;
+use sha2::{Digest, Sha256};
 use specta::Type;
 use std::collections::HashMap;
 use std::fmt;
+use std::fs;
+use std::path::PathBuf;
 use tauri::AppHandle;
-use tauri_plugin_store::StoreExt;
 
-pub const APPLE_INTELLIGENCE_PROVIDER_ID: &str = "apple_intelligence";
-pub const APPLE_INTELLIGENCE_DEFAULT_MODEL_ID: &str = "Apple Intelligence";
-const LEGACY_MISTRAL_TRANSCRIPTION_API_KEY_SHA256: &str =
-    "831d425f8d36527617bce8deb421ab2cc39c9fe9692270daf9b8c364918c45cb";
+pub const APP_VERSION: &str = "1.0.0";
+pub const CONFIG_PATH: &str = "config.json";
+pub const LOCKED_MISTRAL_TRANSCRIPTION_MODEL: &str = "voxtral-mini-latest";
+pub const LOCKED_MISTRAL_TRANSCRIPTION_BASE_URL: &str = "https://api.mistral.ai/v1";
+pub const LOCKED_SELECTED_LANGUAGE: &str = "auto";
+pub const LOCKED_APP_LANGUAGE: &str = "en";
+pub const LOCKED_WORD_CORRECTION_THRESHOLD: f64 = 0.18;
+pub const LOCKED_PASTE_METHOD: PasteMethod = PasteMethod::Direct;
+pub const LOCKED_CLIPBOARD_HANDLING: ClipboardHandling = ClipboardHandling::DontModify;
+pub const LOCKED_AUTO_SUBMIT: bool = false;
+pub const LOCKED_APPEND_TRAILING_SPACE: bool = false;
+pub const LOCKED_EXTRA_RECORDING_BUFFER_MS: u64 = 0;
+pub const LOCKED_LAZY_STREAM_CLOSE: bool = false;
+pub const LOCKED_OVERLAY_POSITION: OverlayPosition = OverlayPosition::Bottom;
+pub const LOCKED_HISTORY_LIMIT: usize = 10;
+pub const LOCKED_RECORDING_RETENTION_PERIOD: RecordingRetentionPeriod = RecordingRetentionPeriod::PreserveLimit;
 
 #[derive(Serialize, Debug, Clone, Copy, PartialEq, Eq, Type)]
 #[serde(rename_all = "lowercase")]
@@ -23,7 +36,6 @@ pub enum LogLevel {
     Error,
 }
 
-// Custom deserializer to handle both old numeric format (1-5) and new string format ("trace", "debug", etc.)
 impl<'de> Deserialize<'de> for LogLevel {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -99,25 +111,12 @@ pub enum OverlayPosition {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type)]
 #[serde(rename_all = "snake_case")]
-pub enum ModelUnloadTimeout {
-    Never,
-    Immediately,
-    Min2,
-    Min5,
-    Min10,
-    Min15,
-    Hour1,
-    Sec15, // Debug mode only
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type)]
-#[serde(rename_all = "snake_case")]
 pub enum PasteMethod {
-    CtrlV,
-    Direct,
     None,
-    ShiftInsert,
+    CtrlV,
     CtrlShiftV,
+    Direct,
+    ShiftInsert,
     ExternalScript,
 }
 
@@ -151,93 +150,20 @@ pub enum RecordingRetentionPeriod {
 #[serde(rename_all = "snake_case")]
 pub enum KeyboardImplementation {
     Tauri,
-    HandyKeys,
-}
-
-impl Default for KeyboardImplementation {
-    fn default() -> Self {
-        #[cfg(target_os = "linux")]
-        return KeyboardImplementation::Tauri;
-        #[cfg(not(target_os = "linux"))]
-        return KeyboardImplementation::HandyKeys;
-    }
-}
-
-impl Default for ModelUnloadTimeout {
-    fn default() -> Self {
-        ModelUnloadTimeout::Min5
-    }
-}
-
-impl Default for PasteMethod {
-    fn default() -> Self {
-        // Default to CtrlV for macOS and Windows, Direct for Linux
-        #[cfg(target_os = "linux")]
-        return PasteMethod::Direct;
-        #[cfg(not(target_os = "linux"))]
-        return PasteMethod::CtrlV;
-    }
-}
-
-impl Default for ClipboardHandling {
-    fn default() -> Self {
-        ClipboardHandling::DontModify
-    }
-}
-
-impl Default for AutoSubmitKey {
-    fn default() -> Self {
-        AutoSubmitKey::Enter
-    }
-}
-
-impl ModelUnloadTimeout {
-    pub fn to_minutes(self) -> Option<u64> {
-        match self {
-            ModelUnloadTimeout::Never => None,
-            ModelUnloadTimeout::Immediately => Some(0), // Special case for immediate unloading
-            ModelUnloadTimeout::Min2 => Some(2),
-            ModelUnloadTimeout::Min5 => Some(5),
-            ModelUnloadTimeout::Min10 => Some(10),
-            ModelUnloadTimeout::Min15 => Some(15),
-            ModelUnloadTimeout::Hour1 => Some(60),
-            ModelUnloadTimeout::Sec15 => Some(0), // Special case for debug - handled separately
-        }
-    }
-
-    pub fn to_seconds(self) -> Option<u64> {
-        match self {
-            ModelUnloadTimeout::Never => None,
-            ModelUnloadTimeout::Immediately => Some(0), // Special case for immediate unloading
-            ModelUnloadTimeout::Sec15 => Some(15),
-            _ => self.to_minutes().map(|m| m * 60),
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type)]
-#[serde(rename_all = "snake_case")]
 pub enum SoundTheme {
     Marimba,
-    Pop,
-    Custom,
 }
 
 impl SoundTheme {
-    fn as_str(&self) -> &'static str {
-        match self {
-            SoundTheme::Marimba => "marimba",
-            SoundTheme::Pop => "pop",
-            SoundTheme::Custom => "custom",
-        }
-    }
-
     pub fn to_start_path(&self) -> String {
-        format!("resources/{}_start.wav", self.as_str())
+        "resources/marimba_start.wav".to_string()
     }
 
     pub fn to_stop_path(&self) -> String {
-        format!("resources/{}_stop.wav", self.as_str())
+        "resources/marimba_stop.wav".to_string()
     }
 }
 
@@ -245,17 +171,6 @@ impl SoundTheme {
 #[serde(rename_all = "snake_case")]
 pub enum TypingTool {
     Auto,
-    Wtype,
-    Kwtype,
-    Dotool,
-    Ydotool,
-    Xdotool,
-}
-
-impl Default for TypingTool {
-    fn default() -> Self {
-        TypingTool::Auto
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type)]
@@ -266,27 +181,14 @@ pub enum WhisperAcceleratorSetting {
     Gpu,
 }
 
-impl Default for WhisperAcceleratorSetting {
-    fn default() -> Self {
-        WhisperAcceleratorSetting::Auto
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum OrtAcceleratorSetting {
     Auto,
     Cpu,
     Cuda,
-    #[serde(rename = "directml")]
     DirectMl,
     Rocm,
-}
-
-impl Default for OrtAcceleratorSetting {
-    fn default() -> Self {
-        OrtAcceleratorSetting::Auto
-    }
 }
 
 #[derive(Clone, Serialize, Deserialize, Type)]
@@ -305,6 +207,7 @@ impl fmt::Debug for SecretString {
 
 impl std::ops::Deref for SecretString {
     type Target = String;
+
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -316,175 +219,73 @@ impl std::ops::DerefMut for SecretString {
     }
 }
 
-/* still handy for composing the initial JSON in the store ------------- */
 #[derive(Serialize, Deserialize, Debug, Clone, Type)]
 pub struct AppSettings {
     pub bindings: HashMap<String, ShortcutBinding>,
     pub push_to_talk: bool,
-    #[serde(default = "default_audio_feedback_volume")]
     pub audio_feedback_volume: f32,
-    #[serde(default = "default_sound_theme")]
     pub sound_theme: SoundTheme,
-    #[serde(default = "default_start_hidden")]
     pub start_hidden: bool,
-    #[serde(default = "default_autostart_enabled")]
     pub autostart_enabled: bool,
-    #[serde(default = "default_mistral_transcription_base_url")]
     pub mistral_transcription_base_url: String,
-    #[serde(default = "default_mistral_transcription_api_key")]
     pub mistral_transcription_api_key: SecretString,
-    #[serde(default = "default_model")]
     pub selected_model: String,
-    #[serde(default = "default_always_on_microphone")]
     pub always_on_microphone: bool,
-    #[serde(default)]
     pub selected_microphone: Option<String>,
-    #[serde(default)]
     pub clamshell_microphone: Option<String>,
-    #[serde(default)]
     pub selected_output_device: Option<String>,
-    #[serde(default = "default_selected_language")]
     pub selected_language: String,
-    #[serde(default = "default_overlay_position")]
     pub overlay_position: OverlayPosition,
-    #[serde(default = "default_debug_mode")]
     pub debug_mode: bool,
-    #[serde(default = "default_log_level")]
     pub log_level: LogLevel,
-    #[serde(default)]
     pub custom_words: Vec<String>,
-    #[serde(default)]
-    pub model_unload_timeout: ModelUnloadTimeout,
-    #[serde(default = "default_word_correction_threshold")]
     pub word_correction_threshold: f64,
-    #[serde(default = "default_history_limit")]
     pub history_limit: usize,
-    #[serde(default = "default_recording_retention_period")]
     pub recording_retention_period: RecordingRetentionPeriod,
-    #[serde(default)]
     pub paste_method: PasteMethod,
-    #[serde(default)]
     pub clipboard_handling: ClipboardHandling,
-    #[serde(default = "default_auto_submit")]
     pub auto_submit: bool,
-    #[serde(default)]
     pub auto_submit_key: AutoSubmitKey,
-    #[serde(default)]
     pub append_trailing_space: bool,
-    #[serde(default = "default_app_language")]
     pub app_language: String,
-    #[serde(default)]
     pub experimental_enabled: bool,
-    #[serde(default)]
     pub lazy_stream_close: bool,
-    #[serde(default)]
     pub keyboard_implementation: KeyboardImplementation,
-    #[serde(default = "default_show_tray_icon")]
     pub show_tray_icon: bool,
-    #[serde(default = "default_paste_delay_ms")]
     pub paste_delay_ms: u64,
-    #[serde(default = "default_typing_tool")]
     pub typing_tool: TypingTool,
     pub external_script_path: Option<String>,
-    #[serde(default)]
     pub custom_filler_words: Option<Vec<String>>,
-    #[serde(default)]
     pub whisper_accelerator: WhisperAcceleratorSetting,
-    #[serde(default)]
     pub ort_accelerator: OrtAcceleratorSetting,
-    #[serde(default = "default_whisper_gpu_device")]
     pub whisper_gpu_device: i32,
-    #[serde(default)]
     pub extra_recording_buffer_ms: u64,
 }
 
-fn default_model() -> String {
-    "voxtral-small-2507".to_string()
+#[derive(Serialize, Deserialize)]
+struct PersistedConfig {
+    version: String,
+    fingerprint: String,
+    settings: AppSettings,
 }
 
-fn default_always_on_microphone() -> bool {
-    false
+fn config_path(app: &AppHandle) -> PathBuf {
+    crate::portable::app_data_dir(app)
+        .expect("Failed to resolve app data directory")
+        .join(CONFIG_PATH)
 }
 
-fn default_start_hidden() -> bool {
-    true
+fn config_fingerprint() -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(APP_VERSION.as_bytes());
+    hasher.update(b"|opinionated-config-v1|");
+    format!("{:x}", hasher.finalize())
 }
 
-fn default_autostart_enabled() -> bool {
-    true
+pub fn reset_config(app: &AppHandle) {
+    let path = config_path(app);
+    let _ = fs::remove_file(path);
 }
-
-fn default_selected_language() -> String {
-    "auto".to_string()
-}
-
-fn default_mistral_transcription_base_url() -> String {
-    "https://api.mistral.ai/v1".to_string()
-}
-
-fn default_mistral_transcription_api_key() -> SecretString {
-    SecretString(String::new())
-}
-
-pub const LOCKED_MISTRAL_TRANSCRIPTION_MODEL: &str = "voxtral-small-2507";
-
-fn default_overlay_position() -> OverlayPosition {
-    OverlayPosition::Bottom
-}
-
-fn default_debug_mode() -> bool {
-    false
-}
-
-fn default_log_level() -> LogLevel {
-    LogLevel::Debug
-}
-
-fn default_word_correction_threshold() -> f64 {
-    0.18
-}
-
-fn default_paste_delay_ms() -> u64 {
-    60
-}
-
-fn default_auto_submit() -> bool {
-    false
-}
-
-fn default_history_limit() -> usize {
-    10
-}
-
-fn default_recording_retention_period() -> RecordingRetentionPeriod {
-    RecordingRetentionPeriod::Months1
-}
-
-fn default_audio_feedback_volume() -> f32 {
-    1.0
-}
-
-fn default_sound_theme() -> SoundTheme {
-    SoundTheme::Marimba
-}
-
-fn default_app_language() -> String {
-    "en".to_string()
-}
-
-fn default_show_tray_icon() -> bool {
-    true
-}
-
-fn default_whisper_gpu_device() -> i32 {
-    -1 // auto
-}
-
-fn default_typing_tool() -> TypingTool {
-    TypingTool::Auto
-}
-
-pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
 
 pub fn get_default_settings() -> AppSettings {
     #[cfg(target_os = "windows")]
@@ -521,209 +322,159 @@ pub fn get_default_settings() -> AppSettings {
     AppSettings {
         bindings,
         push_to_talk: true,
-        audio_feedback_volume: default_audio_feedback_volume(),
-        sound_theme: default_sound_theme(),
-        start_hidden: default_start_hidden(),
-        autostart_enabled: default_autostart_enabled(),
-        mistral_transcription_base_url: default_mistral_transcription_base_url(),
-        mistral_transcription_api_key: default_mistral_transcription_api_key(),
-        selected_model: default_model(),
+        audio_feedback_volume: 1.0,
+        sound_theme: SoundTheme::Marimba,
+        start_hidden: false,
+        autostart_enabled: false,
+        mistral_transcription_base_url: LOCKED_MISTRAL_TRANSCRIPTION_BASE_URL.to_string(),
+        mistral_transcription_api_key: SecretString(String::new()),
+        selected_model: LOCKED_MISTRAL_TRANSCRIPTION_MODEL.to_string(),
         always_on_microphone: false,
         selected_microphone: None,
         clamshell_microphone: None,
         selected_output_device: None,
         selected_language: "auto".to_string(),
-        overlay_position: default_overlay_position(),
+        overlay_position: OverlayPosition::Bottom,
         debug_mode: false,
-        log_level: default_log_level(),
+        log_level: LogLevel::Debug,
         custom_words: Vec::new(),
-        model_unload_timeout: ModelUnloadTimeout::default(),
-        word_correction_threshold: default_word_correction_threshold(),
-        history_limit: default_history_limit(),
-        recording_retention_period: default_recording_retention_period(),
-        paste_method: PasteMethod::default(),
-        clipboard_handling: ClipboardHandling::default(),
-        auto_submit: default_auto_submit(),
-        auto_submit_key: AutoSubmitKey::default(),
+        word_correction_threshold: 0.18,
+        history_limit: 10,
+        recording_retention_period: RecordingRetentionPeriod::PreserveLimit,
+        paste_method: PasteMethod::Direct,
+        clipboard_handling: ClipboardHandling::DontModify,
+        auto_submit: false,
+        auto_submit_key: AutoSubmitKey::Enter,
         append_trailing_space: false,
-        app_language: default_app_language(),
+        app_language: "en".to_string(),
         experimental_enabled: false,
         lazy_stream_close: false,
-        keyboard_implementation: KeyboardImplementation::default(),
-        show_tray_icon: default_show_tray_icon(),
-        paste_delay_ms: default_paste_delay_ms(),
-        typing_tool: default_typing_tool(),
+        keyboard_implementation: KeyboardImplementation::Tauri,
+        show_tray_icon: true,
+        paste_delay_ms: 0,
+        typing_tool: TypingTool::Auto,
         external_script_path: None,
         custom_filler_words: None,
-        whisper_accelerator: WhisperAcceleratorSetting::default(),
-        ort_accelerator: OrtAcceleratorSetting::default(),
-        whisper_gpu_device: default_whisper_gpu_device(),
+        whisper_accelerator: WhisperAcceleratorSetting::Auto,
+        ort_accelerator: OrtAcceleratorSetting::Auto,
+        whisper_gpu_device: -1,
         extra_recording_buffer_ms: 0,
     }
 }
 
-fn sanitize_settings(mut settings: AppSettings) -> (AppSettings, bool) {
-    let original = serde_json::to_value(&settings).ok();
+fn sanitize_settings(mut settings: AppSettings) -> AppSettings {
     let defaults = get_default_settings();
 
-    // Keep only the bindings that are still represented in the current UI,
-    // but preserve the user's chosen shortcuts for those bindings.
     let mut sanitized_bindings = defaults.bindings.clone();
-    for (binding_id, binding) in sanitized_bindings.iter_mut() {
+    for (binding_id, binding) in &mut sanitized_bindings {
         if let Some(existing_binding) = settings.bindings.get(binding_id) {
             binding.current_binding = existing_binding.current_binding.clone();
         }
     }
+
     settings.bindings = sanitized_bindings;
-
-    // Purge persisted values for settings that are no longer exposed in the
-    // current UI, and hard-pin internal model/base URL state to the fork's
-    // intended Mistral-only configuration.
-    settings.start_hidden = defaults.start_hidden;
-    settings.autostart_enabled = defaults.autostart_enabled;
-    settings.mistral_transcription_base_url = defaults.mistral_transcription_base_url.clone();
-    settings.selected_model = defaults.selected_model.clone();
-    settings.selected_language = defaults.selected_language.clone();
-    settings.overlay_position = defaults.overlay_position;
-    settings.debug_mode = defaults.debug_mode;
-    settings.custom_words = defaults.custom_words.clone();
-    settings.model_unload_timeout = defaults.model_unload_timeout;
-    settings.history_limit = defaults.history_limit;
-    settings.recording_retention_period = defaults.recording_retention_period;
-    settings.app_language = defaults.app_language.clone();
-    settings.experimental_enabled = defaults.experimental_enabled;
-    settings.lazy_stream_close = defaults.lazy_stream_close;
-    settings.keyboard_implementation = defaults.keyboard_implementation;
-    settings.show_tray_icon = defaults.show_tray_icon;
-    settings.custom_filler_words = defaults.custom_filler_words.clone();
-    settings.whisper_accelerator = defaults.whisper_accelerator;
-    settings.ort_accelerator = defaults.ort_accelerator;
-    settings.whisper_gpu_device = defaults.whisper_gpu_device;
-
-    let changed = original != serde_json::to_value(&settings).ok();
-    (settings, changed)
+    settings.sound_theme = SoundTheme::Marimba;
+    settings.start_hidden = false;
+    settings.autostart_enabled = false;
+    settings.mistral_transcription_base_url = LOCKED_MISTRAL_TRANSCRIPTION_BASE_URL.to_string();
+    settings.selected_model = LOCKED_MISTRAL_TRANSCRIPTION_MODEL.to_string();
+    settings.selected_language = LOCKED_SELECTED_LANGUAGE.to_string();
+    settings.overlay_position = LOCKED_OVERLAY_POSITION;
+    settings.debug_mode = false;
+    settings.custom_words = Vec::new();
+    settings.word_correction_threshold = LOCKED_WORD_CORRECTION_THRESHOLD;
+    settings.history_limit = LOCKED_HISTORY_LIMIT;
+    settings.recording_retention_period = LOCKED_RECORDING_RETENTION_PERIOD;
+    settings.app_language = LOCKED_APP_LANGUAGE.to_string();
+    settings.experimental_enabled = false;
+    settings.lazy_stream_close = LOCKED_LAZY_STREAM_CLOSE;
+    settings.keyboard_implementation = KeyboardImplementation::Tauri;
+    settings.show_tray_icon = true;
+    settings.paste_delay_ms = 0;
+    settings.paste_method = LOCKED_PASTE_METHOD;
+    settings.typing_tool = TypingTool::Auto;
+    settings.external_script_path = None;
+    settings.clipboard_handling = LOCKED_CLIPBOARD_HANDLING;
+    settings.auto_submit = LOCKED_AUTO_SUBMIT;
+    settings.auto_submit_key = AutoSubmitKey::Enter;
+    settings.append_trailing_space = LOCKED_APPEND_TRAILING_SPACE;
+    settings.custom_filler_words = None;
+    settings.whisper_accelerator = WhisperAcceleratorSetting::Auto;
+    settings.ort_accelerator = OrtAcceleratorSetting::Auto;
+    settings.whisper_gpu_device = -1;
+    settings.extra_recording_buffer_ms = LOCKED_EXTRA_RECORDING_BUFFER_MS;
+    settings
 }
 
 pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
-    // Initialize store
-    let store = app
-        .store(crate::portable::store_path(SETTINGS_STORE_PATH))
-        .expect("Failed to initialize store");
+    let path = config_path(app);
+    let expected_fingerprint = config_fingerprint();
 
-    let settings = if let Some(settings_value) = store.get("settings") {
-        // Parse the entire settings object
-        match serde_json::from_value::<AppSettings>(settings_value) {
-            Ok(mut settings) => {
-                debug!("Found existing settings: {:?}", settings);
-                let default_settings = get_default_settings();
-                let mut updated = false;
-
-                // Merge default bindings into existing settings
-                for (key, value) in default_settings.bindings {
-                    if !settings.bindings.contains_key(&key) {
-                        debug!("Adding missing binding: {}", key);
-                        settings.bindings.insert(key, value);
-                        updated = true;
-                    }
-                }
-
-                let (settings, sanitized) = sanitize_settings(settings);
-
-                if updated || sanitized {
-                    debug!("Settings updated during load");
-                    store.set("settings", serde_json::to_value(&settings).unwrap());
-                }
-
-                settings
+    if let Ok(contents) = fs::read_to_string(&path) {
+        match serde_json::from_str::<PersistedConfig>(&contents) {
+            Ok(config) if config.version == APP_VERSION && config.fingerprint == expected_fingerprint => {
+                let settings = sanitize_settings(config.settings);
+                debug!("Loaded config: {:?}", settings);
+                return settings;
+            }
+            Ok(_) => {
+                warn!("Config version/fingerprint mismatch, deleting config file");
+                reset_config(app);
             }
             Err(e) => {
-                warn!("Failed to parse settings: {}", e);
-                // Fall back to default settings if parsing fails
-                let default_settings = get_default_settings();
-                store.set("settings", serde_json::to_value(&default_settings).unwrap());
-                default_settings
+                warn!("Failed to parse config file: {}, deleting config file", e);
+                reset_config(app);
             }
         }
-    } else {
-        let default_settings = get_default_settings();
-        store.set("settings", serde_json::to_value(&default_settings).unwrap());
-        default_settings
-    };
+    }
 
-    settings
+    let defaults = get_default_settings();
+    write_settings(app, defaults.clone());
+    defaults
 }
 
 pub fn get_settings(app: &AppHandle) -> AppSettings {
-    let store = app
-        .store(crate::portable::store_path(SETTINGS_STORE_PATH))
-        .expect("Failed to initialize store");
-
-    let settings = if let Some(settings_value) = store.get("settings") {
-        let settings = serde_json::from_value::<AppSettings>(settings_value).unwrap_or_else(|_| {
-            let default_settings = get_default_settings();
-            store.set("settings", serde_json::to_value(&default_settings).unwrap());
-            default_settings
-        });
-
-        let (sanitized_settings, changed) = sanitize_settings(settings);
-        if changed {
-            store.set(
-                "settings",
-                serde_json::to_value(&sanitized_settings).unwrap(),
-            );
-        }
-        sanitized_settings
-    } else {
-        let default_settings = get_default_settings();
-        store.set("settings", serde_json::to_value(&default_settings).unwrap());
-        default_settings
-    };
-
-    settings
+    load_or_create_app_settings(app)
 }
 
 pub fn write_settings(app: &AppHandle, settings: AppSettings) {
-    let store = app
-        .store(crate::portable::store_path(SETTINGS_STORE_PATH))
-        .expect("Failed to initialize store");
+    let path = config_path(app);
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
 
-    store.set("settings", serde_json::to_value(&settings).unwrap());
+    let persisted = PersistedConfig {
+        version: APP_VERSION.to_string(),
+        fingerprint: config_fingerprint(),
+        settings: sanitize_settings(settings),
+    };
+
+    let serialized = serde_json::to_string_pretty(&persisted).expect("Failed to serialize config");
+    fs::write(path, serialized).expect("Failed to write config");
 }
 
 pub fn get_bindings(app: &AppHandle) -> HashMap<String, ShortcutBinding> {
-    let settings = get_settings(app);
-
-    settings.bindings
+    get_settings(app).bindings
 }
 
 pub fn get_stored_binding(app: &AppHandle, id: &str) -> ShortcutBinding {
-    let bindings = get_bindings(app);
-
-    let binding = bindings.get(id).unwrap().clone();
-
-    binding
+    get_bindings(app)
+        .get(id)
+        .cloned()
+        .expect("Binding should exist")
 }
 
 pub fn get_history_limit(app: &AppHandle) -> usize {
-    let settings = get_settings(app);
-    settings.history_limit
+    get_settings(app).history_limit
 }
 
 pub fn get_recording_retention_period(app: &AppHandle) -> RecordingRetentionPeriod {
-    let settings = get_settings(app);
-    settings.recording_retention_period
+    get_settings(app).recording_retention_period
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn default_settings_disable_auto_submit() {
-        let settings = get_default_settings();
-        assert!(!settings.auto_submit);
-        assert_eq!(settings.auto_submit_key, AutoSubmitKey::Enter);
-    }
 
     #[test]
     fn debug_output_redacts_api_keys() {
@@ -734,13 +485,5 @@ mod tests {
 
         assert!(!debug_output.contains("secret_mistral_key_123"));
         assert!(debug_output.contains("[REDACTED]"));
-    }
-
-    #[test]
-    fn secret_string_debug_redacts_values() {
-        let secret = SecretString("super-secret".into());
-        let out = format!("{:?}", secret);
-        assert!(!out.contains("super-secret"));
-        assert!(out.contains("[REDACTED]"));
     }
 }

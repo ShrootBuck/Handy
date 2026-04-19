@@ -1,6 +1,4 @@
 mod actions;
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-mod apple_intelligence;
 mod audio_feedback;
 pub mod audio_toolkit;
 pub mod cli;
@@ -115,16 +113,6 @@ fn show_main_window(app: &AppHandle) {
 fn should_force_show_permissions_window(app: &AppHandle) -> bool {
     #[cfg(target_os = "windows")]
     {
-        let model_manager = app.state::<Arc<ModelManager>>();
-        let has_downloaded_models = model_manager
-            .get_available_models()
-            .iter()
-            .any(|model| model.is_downloaded);
-
-        if !has_downloaded_models {
-            return false;
-        }
-
         let status = commands::audio::get_windows_microphone_permission_status();
         if status.supported && status.overall_access == commands::audio::PermissionAccess::Denied {
             log::info!(
@@ -273,33 +261,9 @@ pub fn run(cli_args: CliArgs) {
             shortcut::reset_binding,
             shortcut::change_ptt_setting,
             shortcut::change_audio_feedback_volume_setting,
-            shortcut::change_sound_theme_setting,
-            shortcut::change_selected_language_setting,
-            shortcut::change_debug_mode_setting,
-            shortcut::change_word_correction_threshold_setting,
-            shortcut::change_extra_recording_buffer_setting,
-            shortcut::change_paste_delay_ms_setting,
-            shortcut::change_paste_method_setting,
-            shortcut::get_available_typing_tools,
-            shortcut::change_typing_tool_setting,
-            shortcut::change_external_script_path_setting,
-            shortcut::change_clipboard_handling_setting,
-            shortcut::change_auto_submit_setting,
-            shortcut::change_auto_submit_key_setting,
-            shortcut::update_custom_words,
             shortcut::suspend_binding,
             shortcut::resume_binding,
-            shortcut::change_append_trailing_space_setting,
-            shortcut::change_lazy_stream_close_setting,
             shortcut::change_mistral_transcription_api_key_setting,
-            shortcut::change_keyboard_implementation_setting,
-            shortcut::get_keyboard_implementation,
-            shortcut::change_whisper_accelerator_setting,
-            shortcut::change_ort_accelerator_setting,
-            shortcut::change_whisper_gpu_device,
-            shortcut::get_available_accelerators,
-            shortcut::handy_keys::start_handy_keys_recording,
-            shortcut::handy_keys::stop_handy_keys_recording,
             show_main_window_command,
             commands::cancel_operation,
             commands::is_portable,
@@ -312,15 +276,8 @@ pub fn run(cli_args: CliArgs) {
             commands::initialize_enigo,
             commands::initialize_shortcuts,
             commands::models::get_available_models,
-            commands::models::get_model_info,
-            commands::models::download_model,
-            commands::models::delete_model,
-            commands::models::cancel_download,
             commands::models::set_active_model,
             commands::models::get_current_model,
-            commands::models::is_model_loading,
-            commands::models::has_any_models_available,
-            commands::models::has_any_models_or_downloads,
             commands::audio::update_microphone_mode,
             commands::audio::get_microphone_mode,
             commands::audio::get_windows_microphone_permission_status,
@@ -331,12 +288,7 @@ pub fn run(cli_args: CliArgs) {
             commands::audio::get_available_output_devices,
             commands::audio::set_selected_output_device,
             commands::audio::get_selected_output_device,
-            commands::audio::play_test_sound,
-            commands::audio::check_custom_sounds,
-            commands::audio::set_clamshell_microphone,
-            commands::audio::get_clamshell_microphone,
             commands::audio::is_recording,
-            commands::transcription::set_model_unload_timeout,
             commands::history::get_history_entries,
             commands::history::toggle_history_entry_saved,
             commands::history::get_audio_file_path,
@@ -414,7 +366,6 @@ pub fn run(cli_args: CliArgs) {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_macos_permissions::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -457,17 +408,6 @@ pub fn run(cli_args: CliArgs) {
             app.manage(TranscriptionCoordinator::new(app_handle.clone()));
 
             initialize_core_logic(&app_handle);
-
-            // Pre-warm GPU/accelerator enumeration on a background thread.
-            // The first call into transcribe_rs::whisper_cpp::gpu::list_gpu_devices
-            // loads the Metal/Vulkan backend and probes devices, which can take
-            // several seconds. Without this, that cost is paid synchronously the
-            // first time the user opens the Advanced settings page (which calls
-            // the get_available_accelerators command), causing a UI freeze.
-            // Result is cached in a OnceLock inside the transcription manager.
-            std::thread::spawn(|| {
-                let _ = crate::managers::transcription::get_available_accelerators();
-            });
 
             // Hide tray icon if --no-tray was passed
             if cli_args.no_tray {

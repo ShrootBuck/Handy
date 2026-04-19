@@ -8,8 +8,6 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::Manager;
 
-const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
-
 fn set_mute(mute: bool) {
     // Expected behavior:
     // - Windows: works on most systems using standard audio drivers.
@@ -213,30 +211,6 @@ impl AudioRecordingManager {
                 None
             }
         }
-    }
-
-    fn schedule_lazy_close(&self) {
-        let gen = self.close_generation.fetch_add(1, Ordering::SeqCst) + 1;
-        let app = self.app_handle.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(STREAM_IDLE_TIMEOUT);
-            let rm = app.state::<Arc<AudioRecordingManager>>();
-            // Hold state lock across the check AND close to serialize against
-            // try_start_recording, preventing a race where the stream is closed
-            // under an active recording.
-            let state = rm.state.lock().unwrap();
-            if rm.close_generation.load(Ordering::SeqCst) == gen
-                && matches!(*state, RecordingState::Idle)
-            {
-                // stop_microphone_stream does not acquire the state lock,
-                // so holding it here is safe (no deadlock).
-                info!(
-                    "Closing idle microphone stream after {:?}",
-                    STREAM_IDLE_TIMEOUT
-                );
-                rm.stop_microphone_stream();
-            }
-        });
     }
 
     /* ---------- microphone life-cycle -------------------------------------- */
@@ -448,11 +422,7 @@ impl AudioRecordingManager {
 
                 // In on-demand mode, close the mic (lazily if the setting is enabled)
                 if matches!(*self.mode.lock().unwrap(), MicrophoneMode::OnDemand) {
-                    if get_settings(&self.app_handle).lazy_stream_close {
-                        self.schedule_lazy_close();
-                    } else {
-                        self.stop_microphone_stream();
-                    }
+                    self.stop_microphone_stream();
                 }
 
                 // Pad if very short
@@ -492,11 +462,7 @@ impl AudioRecordingManager {
 
             // In on-demand mode, close the mic (lazily if the setting is enabled)
             if matches!(*self.mode.lock().unwrap(), MicrophoneMode::OnDemand) {
-                if get_settings(&self.app_handle).lazy_stream_close {
-                    self.schedule_lazy_close();
-                } else {
-                    self.stop_microphone_stream();
-                }
+                self.stop_microphone_stream();
             }
         }
     }

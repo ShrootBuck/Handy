@@ -1,4 +1,3 @@
-use crate::settings::SoundTheme;
 use crate::settings::{self, AppSettings};
 use cpal::traits::{DeviceTrait, HostTrait};
 use log::{debug, error, warn};
@@ -31,18 +30,14 @@ fn resolve_sound_path(
 
 fn get_sound_path(settings: &AppSettings, sound_type: SoundType) -> String {
     match (settings.sound_theme, sound_type) {
-        (SoundTheme::Custom, SoundType::Start) => "custom_start.wav".to_string(),
-        (SoundTheme::Custom, SoundType::Stop) => "custom_stop.wav".to_string(),
         (_, SoundType::Start) => settings.sound_theme.to_start_path(),
         (_, SoundType::Stop) => settings.sound_theme.to_stop_path(),
     }
 }
 
 fn get_sound_base_dir(settings: &AppSettings) -> tauri::path::BaseDirectory {
-    match settings.sound_theme {
-        SoundTheme::Custom => tauri::path::BaseDirectory::AppData,
-        _ => tauri::path::BaseDirectory::Resource,
-    }
+    let _ = settings;
+    tauri::path::BaseDirectory::Resource
 }
 
 pub fn play_feedback_sound(app: &AppHandle, sound_type: SoundType) {
@@ -53,13 +48,6 @@ pub fn play_feedback_sound(app: &AppHandle, sound_type: SoundType) {
 }
 
 pub fn play_feedback_sound_blocking(app: &AppHandle, sound_type: SoundType) {
-    let settings = settings::get_settings(app);
-    if let Some(path) = resolve_sound_path(app, &settings, sound_type) {
-        play_sound_blocking(app, &path);
-    }
-}
-
-pub fn play_test_sound(app: &AppHandle, sound_type: SoundType) {
     let settings = settings::get_settings(app);
     if let Some(path) = resolve_sound_path(app, &settings, sound_type) {
         play_sound_blocking(app, &path);

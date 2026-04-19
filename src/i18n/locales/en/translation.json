@@ -165,7 +165,7 @@
         },
         "model": {
           "title": "Hosted Model ID",
-          "description": "Model sent to Mistral's hosted transcription API. Voxtral Small uses chat completions under the hood."
+          "description": "Model sent to Mistral's hosted transcription API. Handy now uses Mistral's dedicated speech-to-text endpoint."
         }
       }
     },

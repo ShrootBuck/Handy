@@ -1,12 +1,7 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { listen } from "@tauri-apps/api/event";
-import type {
-  AppSettings as Settings,
-  AudioDevice,
-  WhisperAcceleratorSetting,
-  OrtAcceleratorSetting,
-} from "@/bindings";
+import type { AppSettings as Settings, AudioDevice } from "@/bindings";
 import { commands } from "@/bindings";
 
 interface SettingsStore {
@@ -16,7 +11,6 @@ interface SettingsStore {
   isUpdating: Record<string, boolean>;
   audioDevices: AudioDevice[];
   outputDevices: AudioDevice[];
-  customSounds: { start: boolean; stop: boolean };
 
   // Actions
   initialize: () => Promise<void>;
@@ -33,8 +27,6 @@ interface SettingsStore {
   resetBinding: (id: string) => Promise<void>;
   getSetting: <K extends keyof Settings>(key: K) => Settings[K] | undefined;
   isUpdatingKey: (key: string) => boolean;
-  playTestSound: (soundType: "start" | "stop") => Promise<void>;
-  checkCustomSounds: () => Promise<void>;
 
   // Internal state setters
   setSettings: (settings: Settings | null) => void;
@@ -43,7 +35,6 @@ interface SettingsStore {
   setUpdating: (key: string, updating: boolean) => void;
   setAudioDevices: (devices: AudioDevice[]) => void;
   setOutputDevices: (devices: AudioDevice[]) => void;
-  setCustomSounds: (sounds: { start: boolean; stop: boolean }) => void;
 }
 
 // Note: Default settings are now fetched from Rust via commands.getDefaultSettings().
@@ -62,7 +53,6 @@ const settingUpdaters: {
     commands.updateMicrophoneMode(value as boolean),
   audio_feedback_volume: (value) =>
     commands.changeAudioFeedbackVolumeSetting(value as number),
-  sound_theme: (value) => commands.changeSoundThemeSetting(value as string),
   mistral_transcription_api_key: (value) =>
     commands.changeMistralTranscriptionApiKeySetting(value as string),
   push_to_talk: (value) => commands.changePttSetting(value as boolean),
@@ -82,38 +72,7 @@ const settingUpdaters: {
         ? "default"
         : (value as string),
     ),
-  selected_language: (value) =>
-    commands.changeSelectedLanguageSetting(value as string),
-  debug_mode: (value) => commands.changeDebugModeSetting(value as boolean),
-  custom_words: (value) => commands.updateCustomWords(value as string[]),
-  word_correction_threshold: (value) =>
-    commands.changeWordCorrectionThresholdSetting(value as number),
-  paste_delay_ms: (value) =>
-    commands.changePasteDelayMsSetting(value as number),
-  paste_method: (value) => commands.changePasteMethodSetting(value as string),
-  typing_tool: (value) => commands.changeTypingToolSetting(value as string),
-  external_script_path: (value) =>
-    commands.changeExternalScriptPathSetting(value as string | null),
-  clipboard_handling: (value) =>
-    commands.changeClipboardHandlingSetting(value as string),
-  auto_submit: (value) => commands.changeAutoSubmitSetting(value as boolean),
-  auto_submit_key: (value) =>
-    commands.changeAutoSubmitKeySetting(value as string),
-  append_trailing_space: (value) =>
-    commands.changeAppendTrailingSpaceSetting(value as boolean),
   log_level: (value) => commands.setLogLevel(value as any),
-  lazy_stream_close: (value) =>
-    commands.changeLazyStreamCloseSetting(value as boolean),
-  whisper_accelerator: (value) =>
-    commands.changeWhisperAcceleratorSetting(
-      value as WhisperAcceleratorSetting,
-    ),
-  ort_accelerator: (value) =>
-    commands.changeOrtAcceleratorSetting(value as OrtAcceleratorSetting),
-  whisper_gpu_device: (value) =>
-    commands.changeWhisperGpuDevice(value as number),
-  extra_recording_buffer_ms: (value) =>
-    commands.changeExtraRecordingBufferSetting(value as number),
 };
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -124,7 +83,6 @@ export const useSettingsStore = create<SettingsStore>()(
     isUpdating: {},
     audioDevices: [],
     outputDevices: [],
-    customSounds: { start: false, stop: false },
 
     // Internal setters
     setSettings: (settings) => set({ settings }),
@@ -136,7 +94,6 @@ export const useSettingsStore = create<SettingsStore>()(
       })),
     setAudioDevices: (audioDevices) => set({ audioDevices }),
     setOutputDevices: (outputDevices) => set({ outputDevices }),
-    setCustomSounds: (customSounds) => set({ customSounds }),
 
     // Getters
     getSetting: (key) => get().settings?.[key],
@@ -206,24 +163,6 @@ export const useSettingsStore = create<SettingsStore>()(
       } catch (error) {
         console.error("Failed to load output devices:", error);
         set({ outputDevices: [DEFAULT_AUDIO_DEVICE] });
-      }
-    },
-
-    // Play a test sound
-    playTestSound: async (soundType: "start" | "stop") => {
-      try {
-        await commands.playTestSound(soundType);
-      } catch (error) {
-        console.error(`Failed to play test sound (${soundType}):`, error);
-      }
-    },
-
-    checkCustomSounds: async () => {
-      try {
-        const sounds = await commands.checkCustomSounds();
-        get().setCustomSounds(sounds);
-      } catch (error) {
-        console.error("Failed to check custom sounds:", error);
       }
     },
 
@@ -367,7 +306,7 @@ export const useSettingsStore = create<SettingsStore>()(
 
     // Initialize everything
     initialize: async () => {
-      const { refreshSettings, checkCustomSounds, loadDefaultSettings } = get();
+      const { refreshSettings, loadDefaultSettings } = get();
 
       // Note: Audio devices are NOT refreshed here. The frontend (App.tsx)
       // is responsible for calling refreshAudioDevices/refreshOutputDevices
@@ -376,7 +315,6 @@ export const useSettingsStore = create<SettingsStore>()(
       await Promise.all([
         loadDefaultSettings(),
         refreshSettings(),
-        checkCustomSounds(),
       ]);
 
       // Re-fetch settings when the backend changes them (e.g. language
