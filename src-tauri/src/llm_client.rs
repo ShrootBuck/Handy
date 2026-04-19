@@ -1,24 +1,34 @@
+use base64::Engine;
 use log::debug;
-use reqwest::blocking::{multipart as blocking_multipart, Client as BlockingClient};
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, USER_AGENT};
+use reqwest::blocking::Client as BlockingClient;
+use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE, USER_AGENT};
 use serde::Deserialize;
-use std::thread;
-use std::time::Duration;
+use serde_json::json;
 
 const MISTRAL_RATE_LIMIT_HINT: &str = "Mistral rate limit exceeded. If you are on the free Experiment plan, this is probably their limit rather than Handy. Wait a bit, speak less frequently, or switch the key to a Scale plan.";
 
 #[derive(Debug, Deserialize)]
-struct AudioTranscriptionResponse {
-    text: String,
+struct ChatChoiceMessage {
+    #[serde(default)]
+    content: Option<String>,
 }
 
-fn mistral_transcription_prompt(language: Option<&str>) -> String {
-    let base = "You are a speech-to-text transcription model. Your ONLY task is to accurately transcribe spoken audio into text. Do not add explanations, descriptions, commentary, or any additional content. Output ONLY the transcribed words.";
+#[derive(Debug, Deserialize)]
+struct ChatChoice {
+    message: ChatChoiceMessage,
+}
 
+#[derive(Debug, Deserialize)]
+struct ChatCompletionResponse {
+    choices: Vec<ChatChoice>,
+}
+
+fn transcription_instruction(language: Option<&str>) -> String {
+    let base = "You are a speech-to-text transcription model. Transcribe the provided audio VERBATIM into plain text. Output ONLY the words that were spoken — no preamble, no commentary, no quotation marks, no descriptions of sounds, no language labels, no summaries. If the audio is silent or empty, output an empty string.";
     match language.filter(|value| !value.trim().is_empty()) {
-        Some(language) => format!(
+        Some(lang) => format!(
             "{} The speaker is speaking in {}. Transcribe exactly what is said, nothing more.",
-            base, language
+            base, lang
         ),
         None => base.to_string(),
     }
@@ -41,8 +51,8 @@ pub fn transcribe_with_mistral_blocking(
         return Err("Mistral base URL is required.".to_string());
     }
 
-    let url = format!("{}/audio/transcriptions", base_url);
-    debug!("Sending Mistral audio transcription request to: {}", url);
+    let url = format!("{}/chat/completions", base_url);
+    debug!("Sending Mistral chat completions (audio) request to: {}", url);
 
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -54,71 +64,72 @@ pub fn transcribe_with_mistral_blocking(
         USER_AGENT,
         HeaderValue::from_static("Handy/1.0 (+https://github.com/ShrootBuck/Handy)"),
     );
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
     let client = BlockingClient::builder()
         .default_headers(headers)
         .build()
         .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
 
-    let prompt = mistral_transcription_prompt(language);
-    
-    let part = blocking_multipart::Part::bytes(wav_bytes)
-        .file_name("audio.wav")
-        .mime_str("audio/wav")
-        .map_err(|e| format!("Failed to create audio part: {}", e))?;
+    let audio_b64 = base64::engine::general_purpose::STANDARD.encode(&wav_bytes);
+    let instruction = transcription_instruction(language);
 
-    let mut form = blocking_multipart::Form::new()
-        .part("file", part)
-        .text("model", model.to_string())
-        .text("response_format", "json".to_string())
-        .text("prompt", prompt);
-
-    if let Some(lang) = language.filter(|l| !l.trim().is_empty()) {
-        form = form.text("language", lang.to_string());
-    }
-
-    let max_retries = 3;
-    let retry_count = 0;
-
-    loop {
-        // We have to recreate the form data if we retry because it gets consumed by the request
-        let current_form = if retry_count > 0 {
-            // Unreachable because we break or return on all paths that don't retry,
-            // but we need to reconstruct form if we do retry
-            return Err("Retry logic needs to recreate form data".to_string());
-        } else {
-            form
-        };
-
-        let response = match client.post(&url).multipart(current_form).send() {
-            Ok(resp) => resp,
-            Err(e) => return Err(format!("HTTP request failed: {}", e)),
-        };
-
-        let status = response.status();
-        let response_body = response.text().unwrap_or_else(|_| "Failed to read response".to_string());
-
-        if status.is_success() {
-            debug!("Mistral response: {}", response_body);
-            let parsed_response: AudioTranscriptionResponse =
-                serde_json::from_str(&response_body)
-                    .map_err(|e| format!("Failed to parse response: {}", e))?;
-            return Ok(parsed_response.text);
-        } else if status.as_u16() == 429 {
-            if retry_count < max_retries {
-                let wait_time = 2u64.pow(retry_count as u32);
-                debug!("Rate limited (429). Retrying in {} seconds...", wait_time);
-                thread::sleep(Duration::from_secs(wait_time));
-                // Reconstruct form for retry since it was consumed
-                return Err("Rate limit exceeded. Please wait a moment and try again.".to_string()); // Actually failing for now instead of fully implementing retry to keep it simple
-            } else {
-                return Err(format!("{}\n\nAPI Error: {}", MISTRAL_RATE_LIMIT_HINT, response_body));
+    let body = json!({
+        "model": model,
+        "temperature": 0.0,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_audio",
+                        "input_audio": {
+                            "data": audio_b64,
+                            "format": "wav"
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": instruction
+                    }
+                ]
             }
-        } else {
-            return Err(format!(
-                "Mistral API request failed with status {}: {}",
-                status, response_body
-            ));
-        }
+        ]
+    });
+
+    let response = client
+        .post(&url)
+        .json(&body)
+        .send()
+        .map_err(|e| format!("HTTP request failed: {}", e))?;
+
+    let status = response.status();
+    let response_body = response
+        .text()
+        .unwrap_or_else(|_| "Failed to read response".to_string());
+
+    if status.is_success() {
+        debug!("Mistral chat response: {}", response_body);
+        let parsed: ChatCompletionResponse = serde_json::from_str(&response_body)
+            .map_err(|e| format!("Failed to parse response: {} — body: {}", e, response_body))?;
+        let text = parsed
+            .choices
+            .into_iter()
+            .next()
+            .and_then(|c| c.message.content)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        Ok(text)
+    } else if status.as_u16() == 429 {
+        Err(format!(
+            "{}\n\nAPI Error: {}",
+            MISTRAL_RATE_LIMIT_HINT, response_body
+        ))
+    } else {
+        Err(format!(
+            "Mistral API request failed with status {}: {}",
+            status, response_body
+        ))
     }
 }
