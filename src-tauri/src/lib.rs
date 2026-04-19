@@ -78,6 +78,13 @@ fn build_console_filter() -> env_filter::Filter {
 }
 
 fn show_main_window(app: &AppHandle) {
+    #[cfg(target_os = "macos")]
+    {
+        if let Err(e) = app.set_activation_policy(tauri::ActivationPolicy::Regular) {
+            log::error!("Failed to set activation policy to Regular: {}", e);
+        }
+    }
+
     if let Some(main_window) = app.get_webview_window("main") {
         if let Err(e) = main_window.unminimize() {
             log::error!("Failed to unminimize webview window: {}", e);
@@ -87,12 +94,6 @@ fn show_main_window(app: &AppHandle) {
         }
         if let Err(e) = main_window.set_focus() {
             log::error!("Failed to focus webview window: {}", e);
-        }
-        #[cfg(target_os = "macos")]
-        {
-            if let Err(e) = app.set_activation_policy(tauri::ActivationPolicy::Regular) {
-                log::error!("Failed to set activation policy to Regular: {}", e);
-            }
         }
         return;
     }
@@ -338,6 +339,15 @@ pub fn run(cli_args: CliArgs) {
             let should_hide = cli_args.start_hidden;
             let should_force_show = should_force_show_permissions_window(&app_handle);
             let tray_available = !cli_args.no_tray;
+
+            #[cfg(target_os = "macos")]
+            if should_hide && tray_available && !should_force_show {
+                if let Err(e) = app_handle.set_activation_policy(tauri::ActivationPolicy::Accessory)
+                {
+                    log::error!("Failed to set activation policy to Accessory on hidden startup: {}", e);
+                }
+            }
+
             if should_force_show || !should_hide || !tray_available {
                 show_main_window(&app_handle);
             }
