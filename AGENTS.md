@@ -1,1 +1,0 @@
-This is a fork of another open source project, except I removed all local models and support for that kind of stuff, and now it's just simply only Mistral's model in a transcription. I don't care about any of the other stuff except the Mistral model. So, be wary that some of the stuff might just be legacy code at places.
