@@ -1,10 +1,13 @@
-use log::debug;
+use log::{debug, warn};
 use reqwest::blocking::Client as BlockingClient;
 use reqwest::blocking::multipart::{Form, Part};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, USER_AGENT};
 use serde::Deserialize;
+use std::time::Duration;
 
 const MISTRAL_RATE_LIMIT_HINT: &str = "Mistral rate limit exceeded. If you are on the free Experiment plan, this is probably their limit rather than Handy. Wait a bit, speak less frequently, or switch the key to a Scale plan.";
+const MAX_RETRY_ATTEMPTS: u32 = 5;
+const INITIAL_BACKOFF_MS: u64 = 1000;
 
 #[derive(Debug, Deserialize)]
 struct TranscriptionResponse {
@@ -48,46 +51,94 @@ pub fn transcribe_with_mistral_blocking(
         .build()
         .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
 
-    let audio_part = Part::bytes(wav_bytes)
-        .file_name("recording.wav")
-        .mime_str("audio/wav")
-        .map_err(|e| format!("Failed to build audio upload: {}", e))?;
+    let language = language.filter(|value| !value.trim().is_empty());
 
-    let mut form = Form::new()
-        .text("model", model.to_string())
-        .part("file", audio_part);
+    let mut last_error = String::new();
 
-    if let Some(language) = language.filter(|value| !value.trim().is_empty()) {
-        form = form.text("language", language.to_string());
+    for attempt in 0..MAX_RETRY_ATTEMPTS {
+        if attempt > 0 {
+            let backoff = Duration::from_millis(INITIAL_BACKOFF_MS * 2u64.pow(attempt - 1));
+            warn!(
+                "Retrying Mistral transcription (attempt {}/{} after {}ms backoff)...",
+                attempt + 1,
+                MAX_RETRY_ATTEMPTS,
+                backoff.as_millis()
+            );
+            std::thread::sleep(backoff);
+        }
+
+        let audio_part = Part::bytes(wav_bytes.clone())
+            .file_name("recording.wav")
+            .mime_str("audio/wav")
+            .map_err(|e| format!("Failed to build audio upload: {}", e))?;
+
+        let mut form = Form::new()
+            .text("model", model.to_string())
+            .part("file", audio_part);
+
+        if let Some(lang) = language {
+            form = form.text("language", lang.to_string());
+        }
+
+        let response = client
+            .post(&url)
+            .multipart(form)
+            .send()
+            .map_err(|e| format!("HTTP request failed: {}", e));
+
+        match response {
+            Ok(resp) => {
+                let status = resp.status();
+                let response_body = resp
+                    .text()
+                    .unwrap_or_else(|_| "Failed to read response".to_string());
+
+                if status.is_success() {
+                    debug!("Mistral transcription response: {}", response_body);
+                    let parsed: TranscriptionResponse = serde_json::from_str(&response_body)
+                        .map_err(|e| {
+                            format!("Failed to parse response: {} - body: {}", e, response_body)
+                        })?;
+                    return Ok(parsed.text.trim().to_string());
+                }
+
+                let status_code = status.as_u16();
+                let is_retryable = status_code == 429
+                    || status_code >= 500
+                    || status_code == 408;
+
+                let error_msg = if status_code == 429 {
+                    format!(
+                        "{}\n\nAPI Error: {}",
+                        MISTRAL_RATE_LIMIT_HINT, response_body
+                    )
+                } else {
+                    format!(
+                        "Mistral API request failed with status {}: {}",
+                        status, response_body
+                    )
+                };
+
+                if is_retryable && attempt + 1 < MAX_RETRY_ATTEMPTS {
+                    warn!("Transcription failed with retryable status {}: {}", status_code, error_msg);
+                    last_error = error_msg;
+                    continue;
+                }
+
+                return Err(error_msg);
+            }
+            Err(e) => {
+                if attempt + 1 < MAX_RETRY_ATTEMPTS {
+                    warn!("Transcription HTTP error (retryable): {}", e);
+                    last_error = e;
+                    continue;
+                }
+                return Err(e);
+            }
+        }
     }
 
-    let response = client
-        .post(&url)
-        .multipart(form)
-        .send()
-        .map_err(|e| format!("HTTP request failed: {}", e))?;
-
-    let status = response.status();
-    let response_body = response
-        .text()
-        .unwrap_or_else(|_| "Failed to read response".to_string());
-
-    if status.is_success() {
-        debug!("Mistral transcription response: {}", response_body);
-        let parsed: TranscriptionResponse = serde_json::from_str(&response_body)
-            .map_err(|e| format!("Failed to parse response: {} - body: {}", e, response_body))?;
-        Ok(parsed.text.trim().to_string())
-    } else if status.as_u16() == 429 {
-        Err(format!(
-            "{}\n\nAPI Error: {}",
-            MISTRAL_RATE_LIMIT_HINT, response_body
-        ))
-    } else {
-        Err(format!(
-            "Mistral API request failed with status {}: {}",
-            status, response_body
-        ))
-    }
+    Err(last_error)
 }
 
 #[cfg(test)]
