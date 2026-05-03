@@ -305,6 +305,20 @@ pub fn run(cli_args: CliArgs) {
         .setup(move |app| {
             specta_builder.mount_events(app);
 
+            let app_handle = app.handle().clone();
+
+            let should_hide = cli_args.start_hidden;
+            let should_force_show = should_force_show_permissions_window(&app_handle);
+            let tray_available = !cli_args.no_tray;
+
+            #[cfg(target_os = "macos")]
+            if should_hide && tray_available && !should_force_show {
+                if let Err(e) = app_handle.set_activation_policy(tauri::ActivationPolicy::Accessory)
+                {
+                    log::error!("Failed to set activation policy to Accessory on hidden startup: {}", e);
+                }
+            }
+
             let mut win_builder =
                 tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("/".into()))
                     .title("Handy")
@@ -327,25 +341,12 @@ pub fn run(cli_args: CliArgs) {
             };
             FILE_LOG_LEVEL.store(file_log_level as u8, Ordering::Relaxed);
 
-            let app_handle = app.handle().clone();
             app.manage(TranscriptionCoordinator::new(app_handle.clone()));
 
             initialize_core_logic(&app_handle);
 
             if cli_args.no_tray {
                 tray::set_tray_visibility(&app_handle, false);
-            }
-
-            let should_hide = cli_args.start_hidden;
-            let should_force_show = should_force_show_permissions_window(&app_handle);
-            let tray_available = !cli_args.no_tray;
-
-            #[cfg(target_os = "macos")]
-            if should_hide && tray_available && !should_force_show {
-                if let Err(e) = app_handle.set_activation_policy(tauri::ActivationPolicy::Accessory)
-                {
-                    log::error!("Failed to set activation policy to Accessory on hidden startup: {}", e);
-                }
             }
 
             if should_force_show || !should_hide || !tray_available {
