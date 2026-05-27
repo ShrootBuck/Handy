@@ -1,17 +1,23 @@
+use crate::audio_toolkit::constants::WHISPER_SAMPLE_RATE;
 use crate::audio_toolkit::{list_input_devices, vad::SmoothedVad, AudioRecorder, SileroVad};
 use crate::settings::get_settings;
 use crate::utils;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tauri::Manager;
-
-const WHISPER_SAMPLE_RATE: usize = 16000;
 
 #[derive(Clone, Debug)]
 pub enum RecordingState {
     Idle,
     Recording { binding_id: String },
+}
+
+struct InnerState {
+    state: RecordingState,
+    recorder: Option<AudioRecorder>,
+    is_open: bool,
+    is_recording: bool,
 }
 
 fn create_audio_recorder(
@@ -37,21 +43,20 @@ fn create_audio_recorder(
 
 #[derive(Clone)]
 pub struct AudioRecordingManager {
-    state: Arc<Mutex<RecordingState>>,
+    inner: Arc<Mutex<InnerState>>,
     app_handle: tauri::AppHandle,
-    recorder: Arc<Mutex<Option<AudioRecorder>>>,
-    is_open: Arc<Mutex<bool>>,
-    is_recording: Arc<Mutex<bool>>,
 }
 
 impl AudioRecordingManager {
     pub fn new(app: &tauri::AppHandle) -> Result<Self, anyhow::Error> {
         Ok(Self {
-            state: Arc::new(Mutex::new(RecordingState::Idle)),
+            inner: Arc::new(Mutex::new(InnerState {
+                state: RecordingState::Idle,
+                recorder: None,
+                is_open: false,
+                is_recording: false,
+            })),
             app_handle: app.clone(),
-            recorder: Arc::new(Mutex::new(None)),
-            is_open: Arc::new(Mutex::new(false)),
-            is_recording: Arc::new(Mutex::new(false)),
         })
     }
 
@@ -71,13 +76,8 @@ impl AudioRecordingManager {
         }
     }
 
-    pub fn apply_mute(&self) {}
-
-    pub fn remove_mute(&self) {}
-
-    pub fn preload_vad(&self) -> Result<(), anyhow::Error> {
-        let mut recorder_opt = self.recorder.lock().unwrap();
-        if recorder_opt.is_none() {
+    fn preload_vad_inner(&self, inner: &mut InnerState) -> Result<(), anyhow::Error> {
+        if inner.recorder.is_none() {
             let vad_path = self
                 .app_handle
                 .path()
@@ -86,17 +86,33 @@ impl AudioRecordingManager {
                     tauri::path::BaseDirectory::Resource,
                 )
                 .map_err(|e| anyhow::anyhow!("Failed to resolve VAD path: {}", e))?;
-            *recorder_opt = Some(create_audio_recorder(
-                vad_path.to_str().unwrap(),
-                &self.app_handle,
-            )?);
+            let path_str = vad_path
+                .to_str()
+                .ok_or_else(|| anyhow::anyhow!("VAD path is not valid UTF-8"))?;
+            inner.recorder = Some(create_audio_recorder(path_str, &self.app_handle)?);
         }
         Ok(())
     }
 
-    pub fn start_microphone_stream(&self) -> Result<(), anyhow::Error> {
-        let mut open_flag = self.is_open.lock().unwrap();
-        if *open_flag {
+    fn stop_microphone_stream_inner(inner: &mut InnerState) {
+        if !inner.is_open {
+            return;
+        }
+
+        if let Some(rec) = inner.recorder.as_mut() {
+            if inner.is_recording {
+                let _ = rec.stop();
+                inner.is_recording = false;
+            }
+            let _ = rec.close();
+        }
+
+        inner.is_open = false;
+        debug!("Microphone stream stopped");
+    }
+
+    fn start_microphone_stream_inner(&self, inner: &mut InnerState) -> Result<(), anyhow::Error> {
+        if inner.is_open {
             debug!("Microphone stream already active");
             return Ok(());
         }
@@ -113,15 +129,14 @@ impl AudioRecordingManager {
             }
         }
 
-        self.preload_vad()?;
+        self.preload_vad_inner(inner)?;
 
-        let mut recorder_opt = self.recorder.lock().unwrap();
-        if let Some(rec) = recorder_opt.as_mut() {
+        if let Some(rec) = inner.recorder.as_mut() {
             rec.open(selected_device)
                 .map_err(|e| anyhow::anyhow!("Failed to open recorder: {}", e))?;
         }
 
-        *open_flag = true;
+        inner.is_open = true;
         info!(
             "Microphone stream initialized in {:?}",
             start_time.elapsed()
@@ -129,69 +144,58 @@ impl AudioRecordingManager {
         Ok(())
     }
 
-    pub fn stop_microphone_stream(&self) {
-        let mut open_flag = self.is_open.lock().unwrap();
-        if !*open_flag {
-            return;
-        }
+    pub fn apply_mute(&self) {}
 
-        if let Some(rec) = self.recorder.lock().unwrap().as_mut() {
-            if *self.is_recording.lock().unwrap() {
-                let _ = rec.stop();
-                *self.is_recording.lock().unwrap() = false;
-            }
-            let _ = rec.close();
-        }
+    pub fn remove_mute(&self) {}
 
-        *open_flag = false;
-        debug!("Microphone stream stopped");
+    pub fn preload_vad(&self) -> Result<(), anyhow::Error> {
+        let mut inner = self.inner.lock().unwrap();
+        self.preload_vad_inner(&mut inner)
     }
 
     pub fn try_start_recording(&self, binding_id: &str) -> Result<(), String> {
-        let mut state = self.state.lock().unwrap();
+        let mut inner = self.inner.lock().unwrap();
 
-        if let RecordingState::Idle = *state {
-            if let Err(e) = self.start_microphone_stream() {
-                let msg = format!("{e}");
-                error!("Failed to open microphone stream: {msg}");
-                return Err(msg);
-            }
-
-            if let Some(rec) = self.recorder.lock().unwrap().as_ref() {
-                if rec.start().is_ok() {
-                    *self.is_recording.lock().unwrap() = true;
-                    *state = RecordingState::Recording {
-                        binding_id: binding_id.to_string(),
-                    };
-                    debug!("Recording started for binding {binding_id}");
-                    return Ok(());
-                }
-            }
-            Err("Recorder not available".to_string())
-        } else {
-            Err("Already recording".to_string())
+        if !matches!(inner.state, RecordingState::Idle) {
+            return Err("Already recording".to_string());
         }
+
+        if let Err(e) = self.start_microphone_stream_inner(&mut inner) {
+            let msg = format!("{e}");
+            error!("Failed to open microphone stream: {msg}");
+            return Err(msg);
+        }
+
+        if let Some(rec) = inner.recorder.as_ref() {
+            if rec.start().is_ok() {
+                inner.is_recording = true;
+                inner.state = RecordingState::Recording {
+                    binding_id: binding_id.to_string(),
+                };
+                debug!("Recording started for binding {binding_id}");
+                return Ok(());
+            }
+        }
+        Err("Recorder not available".to_string())
     }
 
     pub fn update_selected_device(&self) -> Result<(), anyhow::Error> {
-        if *self.is_open.lock().unwrap() {
-            self.stop_microphone_stream();
-            self.start_microphone_stream()?;
+        let mut inner = self.inner.lock().unwrap();
+        if inner.is_open {
+            Self::stop_microphone_stream_inner(&mut inner);
+            self.start_microphone_stream_inner(&mut inner)?;
         }
         Ok(())
     }
 
     pub fn stop_recording(&self, binding_id: &str) -> Option<Vec<f32>> {
-        let mut state = self.state.lock().unwrap();
+        let mut inner = self.inner.lock().unwrap();
 
-        match *state {
-            RecordingState::Recording {
-                binding_id: ref active,
-            } if active == binding_id => {
-                *state = RecordingState::Idle;
-                drop(state);
+        match &inner.state {
+            RecordingState::Recording { binding_id: active } if active == binding_id => {
+                inner.state = RecordingState::Idle;
 
-                let samples = if let Some(rec) = self.recorder.lock().unwrap().as_ref() {
+                let samples = if let Some(rec) = inner.recorder.as_ref() {
                     match rec.stop() {
                         Ok(buf) => buf,
                         Err(e) => {
@@ -204,13 +208,18 @@ impl AudioRecordingManager {
                     Vec::new()
                 };
 
-                *self.is_recording.lock().unwrap() = false;
-                self.stop_microphone_stream();
+                inner.is_recording = false;
+                Self::stop_microphone_stream_inner(&mut inner);
 
                 let s_len = samples.len();
-                if s_len < WHISPER_SAMPLE_RATE && s_len > 0 {
+                if s_len < WHISPER_SAMPLE_RATE as usize && s_len > 0 {
+                    warn!(
+                        "Recording is short ({} samples < {}). Padding with silence for transcription.",
+                        s_len,
+                        WHISPER_SAMPLE_RATE
+                    );
                     let mut padded = samples;
-                    padded.resize(WHISPER_SAMPLE_RATE * 5 / 4, 0.0);
+                    padded.resize((WHISPER_SAMPLE_RATE * 5 / 4) as usize, 0.0);
                     Some(padded)
                 } else {
                     Some(samples)
@@ -222,24 +231,23 @@ impl AudioRecordingManager {
 
     pub fn is_recording(&self) -> bool {
         matches!(
-            *self.state.lock().unwrap(),
+            self.inner.lock().unwrap().state,
             RecordingState::Recording { .. }
         )
     }
 
     pub fn cancel_recording(&self) {
-        let mut state = self.state.lock().unwrap();
+        let mut inner = self.inner.lock().unwrap();
 
-        if let RecordingState::Recording { .. } = *state {
-            *state = RecordingState::Idle;
-            drop(state);
+        if let RecordingState::Recording { .. } = inner.state {
+            inner.state = RecordingState::Idle;
 
-            if let Some(rec) = self.recorder.lock().unwrap().as_ref() {
+            if let Some(rec) = inner.recorder.as_ref() {
                 let _ = rec.stop();
             }
 
-            *self.is_recording.lock().unwrap() = false;
-            self.stop_microphone_stream();
+            inner.is_recording = false;
+            Self::stop_microphone_stream_inner(&mut inner);
         }
     }
 }

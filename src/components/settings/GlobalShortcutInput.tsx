@@ -141,7 +141,10 @@ export const GlobalShortcutInput: React.FC<GlobalShortcutInputProps> = ({
             toast.error("Failed to restore the previous shortcut.");
           }
         } else if (editingShortcutId) {
-          commands.resumeBinding(editingShortcutId).catch(console.error);
+          commands.resumeBinding(editingShortcutId).catch((e) => {
+            console.error("Failed to resume binding:", e);
+            toast.error("Failed to resume recording shortcut");
+          });
         }
         setEditingShortcutId(null);
         setKeyPressed([]);
@@ -175,7 +178,10 @@ export const GlobalShortcutInput: React.FC<GlobalShortcutInputProps> = ({
     if (editingShortcutId === id) return; // Already editing this shortcut
 
     // Suspend current binding to avoid firing while recording
-    await commands.suspendBinding(id).catch(console.error);
+    await commands.suspendBinding(id).catch((e) => {
+      console.error("Failed to suspend binding:", e);
+      toast.error("Failed to prepare shortcut for recording");
+    });
 
     // Store the original binding to restore if canceled
     setOriginalBinding(bindings[id]?.current_binding || "");

@@ -277,7 +277,9 @@ const AccessibilityOnboarding: React.FC<AccessibilityOnboardingProps> = ({
         <div className="p-4 rounded-full bg-emerald-500/20">
           <Check className="w-12 h-12 text-emerald-400" />
         </div>
-        <p className="text-lg font-medium text-text">All permissions granted.</p>
+        <p className="text-lg font-medium text-text">
+          All permissions granted.
+        </p>
       </div>
     );
   }
@@ -293,7 +295,8 @@ const AccessibilityOnboarding: React.FC<AccessibilityOnboardingProps> = ({
         <div className="text-center mb-2">
           <h2 className="text-xl font-semibold text-text mb-2">Finish setup</h2>
           <p className="text-text/70">
-            Handy needs a couple of permissions before it can record and type for you.
+            Handy needs a couple of permissions before it can record and type
+            for you.
           </p>
         </div>
 
@@ -305,9 +308,7 @@ const AccessibilityOnboarding: React.FC<AccessibilityOnboardingProps> = ({
                 <Mic className="w-6 h-6 text-logo-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-medium text-text">
-                  Microphone access
-                </h3>
+                <h3 className="font-medium text-text">Microphone access</h3>
                 <p className="text-sm text-text/60 mb-3">
                   Let Handy record your voice for transcription.
                 </p>
@@ -326,9 +327,7 @@ const AccessibilityOnboarding: React.FC<AccessibilityOnboardingProps> = ({
                     onClick={handleGrantMicrophone}
                     className="px-4 py-2 rounded-lg bg-logo-primary hover:bg-logo-primary/90 text-white text-sm font-medium transition-colors"
                   >
-                    {isWindows
-                      ? "Open Settings"
-                      : "Grant access"}
+                    {isWindows ? "Open Settings" : "Grant access"}
                   </button>
                 )}
               </div>
@@ -344,9 +343,7 @@ const AccessibilityOnboarding: React.FC<AccessibilityOnboardingProps> = ({
                 <Keyboard className="w-6 h-6 text-logo-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-medium text-text">
-                  Accessibility access
-                </h3>
+                <h3 className="font-medium text-text">Accessibility access</h3>
                 <p className="text-sm text-text/60 mb-3">
                   Let Handy type transcriptions into the app you are using.
                 </p>

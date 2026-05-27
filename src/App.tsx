@@ -2,9 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { toast, Toaster } from "sonner";
 import { listen } from "@tauri-apps/api/event";
 import { platform } from "@tauri-apps/plugin-os";
-import {
-  checkMicrophonePermission,
-} from "tauri-plugin-macos-permissions-api";
+import { checkMicrophonePermission } from "tauri-plugin-macos-permissions-api";
 import { RecordingErrorEvent } from "./lib/types/events";
 import "./App.css";
 import AccessibilityPermissions from "./components/AccessibilityPermissions";
@@ -78,7 +76,7 @@ function App() {
       }
     });
     return () => {
-      unlisten.then((fn) => fn());
+      unlisten.then((fn) => fn()).catch(console.error);
     };
   }, []);
 
@@ -89,11 +87,12 @@ function App() {
   useEffect(() => {
     const unlisten = listen("paste-error", () => {
       toast.error("Paste failed", {
-        description: "Handy could not type the transcription into the active app.",
+        description:
+          "Handy could not type the transcription into the active app.",
       });
     });
     return () => {
-      unlisten.then((fn) => fn());
+      unlisten.then((fn) => fn()).catch(console.error);
     };
   }, []);
 
@@ -163,9 +162,7 @@ function App() {
   }
 
   return (
-    <div
-      className="h-screen flex flex-col select-none cursor-default"
-    >
+    <div className="h-screen flex flex-col select-none cursor-default">
       <Toaster
         theme="system"
         toastOptions={{

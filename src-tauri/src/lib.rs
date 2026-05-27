@@ -136,35 +136,45 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     app_handle.manage(history_manager);
 
     #[cfg(unix)]
-    let signals = Signals::new(&[SIGUSR1, SIGUSR2]).unwrap();
+    let signals = match Signals::new(&[SIGUSR1, SIGUSR2]) {
+        Ok(s) => s,
+        Err(e) => {
+            log::error!("Failed to register Unix signals: {e}");
+            return;
+        }
+    };
     #[cfg(unix)]
     signal_handle::setup_signal_handler(app_handle.clone(), signals);
 
     let initial_theme = tray::get_current_theme(app_handle);
     let initial_icon_path = tray::get_icon_path(initial_theme, tray::TrayIconState::Idle);
 
-    let tray = TrayIconBuilder::new()
-        .icon(
-            Image::from_path(
-                app_handle
-                    .path()
-                    .resolve(initial_icon_path, tauri::path::BaseDirectory::Resource)
-                    .unwrap(),
-            )
-            .unwrap(),
-        )
-        .tooltip(tray::tray_tooltip())
-        .show_menu_on_left_click(true)
-        .icon_as_template(true)
-        .on_menu_event(|app, event| match event.id.as_ref() {
-            "settings" => show_main_window(app),
-            "copy_last_transcript" => tray::copy_last_transcript(app),
-            "cancel" => crate::utils::cancel_current_operation(app),
-            "quit" => app.exit(0),
-            _ => {}
-        })
-        .build(app_handle)
-        .unwrap();
+    let tray = match (|| -> Result<tauri::tray::TrayIcon, Box<dyn std::error::Error>> {
+        let icon_path = app_handle
+            .path()
+            .resolve(initial_icon_path, tauri::path::BaseDirectory::Resource)?;
+        let icon = Image::from_path(icon_path)?;
+        let tray = TrayIconBuilder::new()
+            .icon(icon)
+            .tooltip(tray::tray_tooltip())
+            .show_menu_on_left_click(true)
+            .icon_as_template(true)
+            .on_menu_event(|app, event| match event.id.as_ref() {
+                "settings" => show_main_window(app),
+                "copy_last_transcript" => tray::copy_last_transcript(app),
+                "cancel" => crate::utils::cancel_current_operation(app),
+                "quit" => app.exit(0),
+                _ => {}
+            })
+            .build(app_handle)?;
+        Ok(tray)
+    })() {
+        Ok(t) => t,
+        Err(e) => {
+            log::error!("Failed to create tray icon: {e}. Running without tray.");
+            return;
+        }
+    };
     app_handle.manage(tray);
 
     utils::update_tray_menu(app_handle, &utils::TrayIconState::Idle);
@@ -315,7 +325,10 @@ pub fn run(cli_args: CliArgs) {
             if should_hide && tray_available && !should_force_show {
                 if let Err(e) = app_handle.set_activation_policy(tauri::ActivationPolicy::Accessory)
                 {
-                    log::error!("Failed to set activation policy to Accessory on hidden startup: {}", e);
+                    log::error!(
+                        "Failed to set activation policy to Accessory on hidden startup: {}",
+                        e
+                    );
                 }
             }
 

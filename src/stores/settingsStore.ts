@@ -178,8 +178,11 @@ export const useSettingsStore = create<SettingsStore>()(
         const updater = settingUpdaters[key];
         if (updater) {
           await updater(value);
-        } else if (key !== "bindings") {
-          console.warn(`No handler for setting: ${String(key)}`);
+        } else if (updateKey !== "bindings") {
+          console.warn(`No handler for setting: ${updateKey}`);
+          if (settings) {
+            set({ settings: { ...settings, [key]: originalValue } });
+          }
         }
       } catch (error) {
         console.error(`Failed to update setting ${String(key)}:`, error);
@@ -197,7 +200,7 @@ export const useSettingsStore = create<SettingsStore>()(
       if (defaultSettings) {
         const defaultValue = defaultSettings[key];
         if (defaultValue !== undefined) {
-          await get().updateSetting(key, defaultValue as any);
+          await get().updateSetting(key, defaultValue);
         }
       }
     },
@@ -305,11 +308,7 @@ export const useSettingsStore = create<SettingsStore>()(
       // is responsible for calling refreshAudioDevices/refreshOutputDevices
       // after onboarding completes. This avoids triggering permission dialogs
       // on macOS before the user is ready.
-      await Promise.all([
-        loadDefaultSettings(),
-        refreshSettings(),
-      ]);
-
+      await Promise.all([loadDefaultSettings(), refreshSettings()]);
     },
   })),
 );

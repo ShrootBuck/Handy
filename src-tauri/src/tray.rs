@@ -99,14 +99,8 @@ pub fn update_tray_menu(app: &AppHandle, state: &TrayIconState) {
     let version_label = version_label();
     let version_i = MenuItem::with_id(app, "version", &version_label, false, None::<&str>)
         .expect("failed to create version item");
-    let settings_i = MenuItem::with_id(
-        app,
-        "settings",
-        "Settings",
-        true,
-        settings_accelerator,
-    )
-    .expect("failed to create settings item");
+    let settings_i = MenuItem::with_id(app, "settings", "Settings", true, settings_accelerator)
+        .expect("failed to create settings item");
     let copy_last_transcript_i = MenuItem::with_id(
         app,
         "copy_last_transcript",

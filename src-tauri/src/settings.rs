@@ -8,7 +8,7 @@ use std::fs;
 use std::path::PathBuf;
 use tauri::AppHandle;
 
-pub const APP_VERSION: &str = "1.0.0";
+pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const CONFIG_PATH: &str = "config.json";
 pub const LOCKED_MISTRAL_TRANSCRIPTION_MODEL: &str = "voxtral-mini-latest";
 pub const LOCKED_MISTRAL_TRANSCRIPTION_BASE_URL: &str = "https://api.mistral.ai/v1";
@@ -69,9 +69,18 @@ struct PersistedConfig {
 }
 
 fn config_path(app: &AppHandle) -> PathBuf {
-    crate::portable::app_data_dir(app)
-        .expect("Failed to resolve app data directory")
-        .join(CONFIG_PATH)
+    match crate::portable::app_data_dir(app) {
+        Ok(dir) => dir.join(CONFIG_PATH),
+        Err(e) => {
+            let fallback = std::env::temp_dir().join("handy").join(CONFIG_PATH);
+            log::warn!(
+                "Could not resolve app data directory ({}). Using fallback: {:?}",
+                e,
+                fallback
+            );
+            fallback
+        }
+    }
 }
 
 fn config_fingerprint() -> String {
@@ -132,14 +141,13 @@ pub fn get_default_settings() -> AppSettings {
 fn sanitize_settings(mut settings: AppSettings) -> AppSettings {
     let defaults = get_default_settings();
 
-    let mut sanitized_bindings = defaults.bindings.clone();
-    for (binding_id, binding) in &mut sanitized_bindings {
-        if let Some(existing_binding) = settings.bindings.get(binding_id) {
-            binding.current_binding = existing_binding.current_binding.clone();
-        }
+    for (id, default_binding) in &defaults.bindings {
+        settings
+            .bindings
+            .entry(id.clone())
+            .or_insert_with(|| default_binding.clone());
     }
 
-    settings.bindings = sanitized_bindings;
     settings
 }
 
@@ -188,19 +196,24 @@ pub fn write_settings(app: &AppHandle, settings: AppSettings) {
         settings: sanitize_settings(settings),
     };
 
-    let serialized = serde_json::to_string_pretty(&persisted).expect("Failed to serialize config");
-    fs::write(path, serialized).expect("Failed to write config");
+    match serde_json::to_string_pretty(&persisted) {
+        Ok(serialized) => {
+            if let Err(e) = fs::write(&path, &serialized) {
+                warn!("Failed to write config file {:?}: {}", path, e);
+            }
+        }
+        Err(e) => {
+            warn!("Failed to serialize config: {}", e);
+        }
+    }
 }
 
 pub fn get_bindings(app: &AppHandle) -> HashMap<String, ShortcutBinding> {
     get_settings(app).bindings
 }
 
-pub fn get_stored_binding(app: &AppHandle, id: &str) -> ShortcutBinding {
-    get_bindings(app)
-        .get(id)
-        .cloned()
-        .expect("Binding should exist")
+pub fn get_stored_binding(app: &AppHandle, id: &str) -> Option<ShortcutBinding> {
+    get_bindings(app).get(id).cloned()
 }
 
 #[cfg(test)]

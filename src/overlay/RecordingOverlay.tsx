@@ -59,9 +59,7 @@ const RecordingOverlay: React.FC = () => {
   };
 
   return (
-    <div
-      className={`recording-overlay ${isVisible ? "fade-in" : ""}`}
-    >
+    <div className={`recording-overlay ${isVisible ? "fade-in" : ""}`}>
       <div className="overlay-left">{getIcon()}</div>
 
       <div className="overlay-middle">
@@ -90,14 +88,15 @@ const RecordingOverlay: React.FC = () => {
 
       <div className="overlay-right">
         {state === "recording" && (
-          <div
+          <button
             className="cancel-button"
+            aria-label="Cancel recording"
             onClick={() => {
               commands.cancelOperation();
             }}
           >
             <CancelIcon />
-          </div>
+          </button>
         )}
       </div>
     </div>

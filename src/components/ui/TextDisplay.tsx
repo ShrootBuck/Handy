@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { SettingContainer } from "./SettingContainer";
 
+export const COPY_FEEDBACK_DURATION = 1500;
+
 interface TextDisplayProps {
   label: string;
   description: string;
@@ -32,7 +34,7 @@ export const TextDisplay: React.FC<TextDisplayProps> = ({
     try {
       await navigator.clipboard.writeText(value);
       setShowCopied(true);
-      setTimeout(() => setShowCopied(false), 1500);
+      setTimeout(() => setShowCopied(false), COPY_FEEDBACK_DURATION);
       if (onCopy) {
         onCopy(value);
       }
@@ -65,23 +67,22 @@ export const TextDisplay: React.FC<TextDisplayProps> = ({
             onClick={handleCopy}
             className="flex items-center justify-center px-2 py-1 w-12 min-h-8 text-xs font-semibold bg-mid-gray/10 hover:bg-logo-primary/10 border border-mid-gray/80 hover:border-logo-primary hover:text-logo-primary rounded-md transition-all duration-150 flex-shrink-0 cursor-pointer"
             title="Copy to clipboard"
+            aria-label="Copy to clipboard"
           >
             {showCopied ? (
-              <div className="flex items-center space-x-1">
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-              </div>
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
             ) : (
               "Copy"
             )}

@@ -11,6 +11,7 @@ import {
 } from "@/bindings";
 import { useOsType } from "@/hooks/useOsType";
 import { formatDateTime } from "@/utils/dateFormat";
+import { COPY_FEEDBACK_DURATION } from "@/components/ui/TextDisplay";
 import { AudioPlayer } from "../../ui/AudioPlayer";
 import { Button } from "../../ui/Button";
 
@@ -24,6 +25,7 @@ const IconButton: React.FC<{
   <button
     onClick={onClick}
     disabled={disabled}
+    aria-label={title}
     className={`p-1.5 rounded-md flex items-center justify-center transition-colors cursor-pointer disabled:cursor-not-allowed disabled:text-text/20 ${
       active
         ? "text-logo-primary hover:text-logo-primary/80"
@@ -144,7 +146,7 @@ export const HistorySettings: React.FC = () => {
     });
 
     return () => {
-      unlisten.then((fn) => fn());
+      unlisten.then((fn) => fn()).catch(console.error);
     };
   }, []);
 
@@ -324,7 +326,7 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
 
     onCopyText();
     setShowCopied(true);
-    setTimeout(() => setShowCopied(false), 2000);
+    setTimeout(() => setShowCopied(false), COPY_FEEDBACK_DURATION);
   };
 
   const handleDeleteEntry = async () => {
@@ -348,7 +350,10 @@ const HistoryEntryComponent: React.FC<HistoryEntryProps> = ({
     }
   };
 
-  const formattedDate = formatDateTime(String(entry.timestamp), "en-US");
+  const formattedDate = formatDateTime(
+    String(entry.timestamp),
+    navigator.language || "en-US",
+  );
 
   return (
     <div className="px-4 py-2 pb-5 flex flex-col gap-3">

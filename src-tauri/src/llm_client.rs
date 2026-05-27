@@ -1,6 +1,6 @@
 use log::{debug, warn};
-use reqwest::blocking::Client as BlockingClient;
 use reqwest::blocking::multipart::{Form, Part};
+use reqwest::blocking::Client as BlockingClient;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, USER_AGENT};
 use serde::Deserialize;
 use std::time::Duration;
@@ -43,7 +43,11 @@ pub fn transcribe_with_mistral_blocking(
     );
     headers.insert(
         USER_AGENT,
-        HeaderValue::from_static("Handy/1.0 (+https://github.com/ShrootBuck/Handy)"),
+        HeaderValue::from_str(&format!(
+            "Handy/{} (+https://github.com/ShrootBuck/Handy)",
+            env!("CARGO_PKG_VERSION")
+        ))
+        .map_err(|e| format!("Invalid user-agent header value: {}", e))?,
     );
 
     let client = BlockingClient::builder()
@@ -103,9 +107,7 @@ pub fn transcribe_with_mistral_blocking(
                 }
 
                 let status_code = status.as_u16();
-                let is_retryable = status_code == 429
-                    || status_code >= 500
-                    || status_code == 408;
+                let is_retryable = status_code == 429 || status_code >= 500 || status_code == 408;
 
                 let error_msg = if status_code == 429 {
                     format!(
@@ -120,7 +122,10 @@ pub fn transcribe_with_mistral_blocking(
                 };
 
                 if is_retryable && attempt + 1 < MAX_RETRY_ATTEMPTS {
-                    warn!("Transcription failed with retryable status {}: {}", status_code, error_msg);
+                    warn!(
+                        "Transcription failed with retryable status {}: {}",
+                        status_code, error_msg
+                    );
                     last_error = error_msg;
                     continue;
                 }

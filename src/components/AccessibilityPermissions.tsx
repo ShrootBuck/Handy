@@ -68,12 +68,12 @@ const AccessibilityPermissions: React.FC = () => {
     request: {
       text: "Open Settings",
       className:
-        "px-2 py-1 text-sm font-semibold bg-mid-gray/10 border  border-mid-gray/80 hover:bg-logo-primary/10 rounded cursor-pointer hover:border-logo-primary",
+        "px-2 py-1 text-sm font-semibold bg-mid-gray/10 border border-mid-gray/80 hover:bg-logo-primary/10 rounded cursor-pointer hover:border-logo-primary min-h-10",
     },
     verify: {
       text: "Check Again",
       className:
-        "bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-1 px-3 rounded-md text-sm flex items-center justify-center cursor-pointer",
+        "px-2 py-1 text-sm font-semibold bg-mid-gray/10 border border-mid-gray/80 hover:bg-logo-primary/10 rounded cursor-pointer hover:border-logo-primary min-h-10",
     },
     granted: null,
   };
@@ -85,13 +85,11 @@ const AccessibilityPermissions: React.FC = () => {
       <div className="flex justify-between items-center gap-2">
         <div className="">
           <p className="text-sm font-medium">
-            Handy needs Accessibility access on macOS so it can type transcriptions into other apps.
+            Handy needs Accessibility access on macOS so it can type
+            transcriptions into other apps.
           </p>
         </div>
-        <button
-          onClick={handleButtonClick}
-          className={`min-h-10 ${config.className}`}
-        >
+        <button onClick={handleButtonClick} className={config.className}>
           {config.text}
         </button>
       </div>
