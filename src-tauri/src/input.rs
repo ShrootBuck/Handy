@@ -22,12 +22,21 @@ pub fn get_cursor_position(app_handle: &AppHandle) -> Option<(i32, i32)> {
     enigo.location().ok()
 }
 
-/// Pastes text directly using the enigo text method.
-/// This tries to use system input methods if possible, otherwise simulates keystrokes one by one.
+/// Delay between each keystroke in milliseconds.
+/// Prevents apps from bugging out due to receiving keys too rapidly.
+const KEY_DELAY_MS: u64 = 10;
+
+/// Pastes text directly by typing each character individually with a delay between keystrokes.
 pub fn paste_text_direct(enigo: &mut Enigo, text: &str) -> Result<(), String> {
-    enigo
-        .text(text)
-        .map_err(|e| format!("Failed to send text directly: {}", e))?;
+    use std::{thread, time::Duration};
+
+    for c in text.chars() {
+        let s = c.to_string();
+        enigo
+            .text(&s)
+            .map_err(|e| format!("Failed to send text directly: {}", e))?;
+        thread::sleep(Duration::from_millis(KEY_DELAY_MS));
+    }
 
     Ok(())
 }
