@@ -59,6 +59,7 @@ pub struct AppSettings {
     pub selected_microphone: Option<String>,
     pub selected_output_device: Option<String>,
     pub autostart_enabled: bool,
+    pub key_delay_ms: u64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -135,6 +136,7 @@ pub fn get_default_settings() -> AppSettings {
         selected_microphone: None,
         selected_output_device: None,
         autostart_enabled: false,
+        key_delay_ms: 10,
     }
 }
 

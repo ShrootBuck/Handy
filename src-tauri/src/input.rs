@@ -22,12 +22,8 @@ pub fn get_cursor_position(app_handle: &AppHandle) -> Option<(i32, i32)> {
     enigo.location().ok()
 }
 
-/// Delay between each keystroke in milliseconds.
-/// Prevents apps from bugging out due to receiving keys too rapidly.
-const KEY_DELAY_MS: u64 = 10;
-
 /// Pastes text directly by typing each character individually with a delay between keystrokes.
-pub fn paste_text_direct(enigo: &mut Enigo, text: &str) -> Result<(), String> {
+pub fn paste_text_direct(enigo: &mut Enigo, text: &str, key_delay_ms: u64) -> Result<(), String> {
     use std::{thread, time::Duration};
 
     for c in text.chars() {
@@ -35,7 +31,7 @@ pub fn paste_text_direct(enigo: &mut Enigo, text: &str) -> Result<(), String> {
         enigo
             .text(&s)
             .map_err(|e| format!("Failed to send text directly: {}", e))?;
-        thread::sleep(Duration::from_millis(KEY_DELAY_MS));
+        thread::sleep(Duration::from_millis(key_delay_ms));
     }
 
     Ok(())

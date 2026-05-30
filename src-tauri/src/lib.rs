@@ -214,6 +214,7 @@ pub fn run(cli_args: CliArgs) {
             shortcut::reset_binding,
             shortcut::change_ptt_setting,
             shortcut::change_audio_feedback_volume_setting,
+            shortcut::change_key_delay_ms_setting,
             shortcut::suspend_binding,
             shortcut::resume_binding,
             shortcut::change_mistral_transcription_api_key_setting,

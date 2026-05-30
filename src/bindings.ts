@@ -24,6 +24,7 @@ export type AppSettings = {
   selected_microphone: string | null;
   selected_output_device: string | null;
   autostart_enabled: boolean;
+  key_delay_ms: number;
 };
 
 export type AudioDevice = {
@@ -129,6 +130,8 @@ export const commands = {
     invokeResult<null>("change_mistral_transcription_api_key_setting", {
       apiKey,
     }),
+  changeKeyDelayMsSetting: (delayMs: number) =>
+    invokeResult<null>("change_key_delay_ms_setting", { delayMs }),
   showMainWindowCommand: () =>
     invokeResult<null>("show_main_window_command"),
   cancelOperation: () => TAURI_INVOKE<void>("cancel_operation"),

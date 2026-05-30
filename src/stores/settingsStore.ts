@@ -68,6 +68,7 @@ const settingUpdaters: {
         ? "default"
         : (value as string),
     ),
+  key_delay_ms: (value) => commands.changeKeyDelayMsSetting(value as number),
 };
 
 export const useSettingsStore = create<SettingsStore>()(

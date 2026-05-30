@@ -207,3 +207,12 @@ pub fn change_mistral_transcription_api_key_setting(
     settings::write_settings(&app, settings);
     Ok(())
 }
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_key_delay_ms_setting(app: AppHandle, delay_ms: u64) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.key_delay_ms = delay_ms;
+    settings::write_settings(&app, settings);
+    Ok(())
+}

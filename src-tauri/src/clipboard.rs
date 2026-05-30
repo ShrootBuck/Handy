@@ -1,9 +1,12 @@
 use crate::input::{self, EnigoState};
+use crate::settings::get_settings;
 use log::info;
 use tauri::{AppHandle, Manager};
 
 pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
     info!("Pasting {} chars via direct typing", text.len());
+
+    let key_delay_ms = get_settings(&app_handle).key_delay_ms;
 
     let enigo_state = app_handle
         .try_state::<EnigoState>()
@@ -13,5 +16,5 @@ pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
         .lock()
         .map_err(|e| format!("Failed to lock Enigo: {}", e))?;
 
-    input::paste_text_direct(&mut enigo, &text)
+    input::paste_text_direct(&mut enigo, &text, key_delay_ms)
 }
